@@ -133,6 +133,93 @@ END;
 /
 
 -- =================================================================
+-- 3. 用户会议关联表 (user_meeting_associations)
+-- 实现用户与会议的多对多关系（简化版）
+-- =================================================================
+
+-- 删除已存在的表（如果存在）
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE user_meeting_associations CASCADE CONSTRAINTS';
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL; -- 忽略表不存在的错误
+END;
+/
+
+-- 创建用户会议关联表
+CREATE TABLE user_meeting_associations (
+    -- 主键字段（自增序列）
+    id                  NUMBER(19)          NOT NULL,
+    
+    -- 必要关联字段
+    user_id             VARCHAR2(50)        NOT NULL,
+    meeting_id          VARCHAR2(50)        NOT NULL,
+    
+    -- 额外字段
+    notes               CLOB                DEFAULT NULL,
+    
+    -- 时间戳字段
+    created_at          TIMESTAMP           DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at          TIMESTAMP           DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    
+    -- 关联字段
+    created_by          VARCHAR2(50)        DEFAULT NULL,
+    updated_by          VARCHAR2(50)        DEFAULT NULL,
+    
+    -- 主键约束
+    CONSTRAINT pk_user_meeting_associations PRIMARY KEY (id),
+    
+    -- 唯一约束（确保同一用户在同一会议中只有一条记录）
+    CONSTRAINT uk_uma_user_meeting UNIQUE (user_id, meeting_id)
+);
+
+-- 添加表和字段注释
+COMMENT ON TABLE user_meeting_associations IS '用户会议关联表（多对多关系，简化版）';
+COMMENT ON COLUMN user_meeting_associations.id IS '唯一ID（自增主键）';
+COMMENT ON COLUMN user_meeting_associations.user_id IS '用户ID，关联users表';
+COMMENT ON COLUMN user_meeting_associations.meeting_id IS '会议ID，关联meetings表';
+COMMENT ON COLUMN user_meeting_associations.notes IS '备注信息（如请假原因、特殊说明等）';
+COMMENT ON COLUMN user_meeting_associations.created_at IS '创建时间';
+COMMENT ON COLUMN user_meeting_associations.updated_at IS '更新时间';
+COMMENT ON COLUMN user_meeting_associations.created_by IS '创建者用户ID';
+COMMENT ON COLUMN user_meeting_associations.updated_by IS '更新者用户ID';
+
+-- 创建自增序列
+CREATE SEQUENCE seq_user_meeting_associations
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+-- 创建触发器实现自增主键
+CREATE OR REPLACE TRIGGER tr_uma_before_insert
+    BEFORE INSERT ON user_meeting_associations
+    FOR EACH ROW
+BEGIN
+    IF :NEW.id IS NULL THEN
+        SELECT seq_user_meeting_associations.NEXTVAL INTO :NEW.id FROM DUAL;
+    END IF;
+END;
+/
+
+-- 创建自动更新时间的触发器
+CREATE OR REPLACE TRIGGER tr_uma_before_update
+    BEFORE UPDATE ON user_meeting_associations
+    FOR EACH ROW
+BEGIN
+    -- 自动更新updated_at字段
+    :NEW.updated_at := CURRENT_TIMESTAMP;
+END;
+/
+
+-- 创建索引
+CREATE INDEX idx_uma_user_id ON user_meeting_associations(user_id);
+CREATE INDEX idx_uma_meeting_id ON user_meeting_associations(meeting_id);
+CREATE INDEX idx_uma_created_at ON user_meeting_associations(created_at);
+CREATE INDEX idx_uma_created_by ON user_meeting_associations(created_by);
+CREATE INDEX idx_uma_updated_by ON user_meeting_associations(updated_by);
+
+-- =================================================================
 -- 4. 更新现有meetings表，添加用户关联字段
 -- =================================================================
 
@@ -173,7 +260,50 @@ END;
 /
 
 -- =================================================================
--- 5. 插入初始用户数据
+-- 5. 插入用户会议关联示例数据
+-- =================================================================
+-- 注意：这里假设meetings表中已有一些会议数据，实际使用时需要根据具体的meeting_id进行调整
+-- 示例：创建用户与会议的关联记录
+
+-- 插入示例关联数据（如果meetings表中有对应的会议记录）
+-- INSERT INTO user_meeting_associations (
+--     user_id,
+--     meeting_id,
+--     notes,
+--     created_by,
+--     created_at,
+--     updated_at
+-- ) VALUES 
+-- -- 系统管理员关联会议
+-- (
+--     'admin-user-system-00000000001',
+--     'meeting-example-id-001',  -- 需要替换为实际的meeting_id
+--     '会议组织者',
+--     'admin-user-system-00000000001',
+--     CURRENT_TIMESTAMP,
+--     CURRENT_TIMESTAMP
+-- );
+-- 
+-- INSERT INTO user_meeting_associations (
+--     user_id,
+--     meeting_id,
+--     notes,
+--     created_by,
+--     created_at,
+--     updated_at
+-- ) VALUES 
+-- -- 测试用户关联会议
+-- (
+--     'demo-user-test-000000000002',
+--     'meeting-example-id-001',  -- 需要替换为实际的meeting_id
+--     '会议参与者',
+--     'admin-user-system-00000000001',
+--     CURRENT_TIMESTAMP,
+--     CURRENT_TIMESTAMP
+-- );
+
+-- =================================================================
+-- 6. 插入初始用户数据
 -- =================================================================
 
 -- 插入系统管理员
@@ -248,22 +378,27 @@ BEGIN
 
     DBMS_OUTPUT.PUT_LINE('=== 初始化统计 ===');
     DBMS_OUTPUT.PUT_LINE('users表已创建');
-    DBMS_OUTPUT.PUT_LINE('索引已创建: 10个');
-    DBMS_OUTPUT.PUT_LINE('触发器已创建: 1个');
+    DBMS_OUTPUT.PUT_LINE('user_meeting_associations表已创建');
+    DBMS_OUTPUT.PUT_LINE('索引已创建: 15个');
+    DBMS_OUTPUT.PUT_LINE('触发器已创建: 3个');
+    DBMS_OUTPUT.PUT_LINE('序列已创建: 1个');
 
     -- 显示用户数量统计
     DECLARE
         v_total_count NUMBER := 0;
         v_admin_count NUMBER := 0;
         v_active_count NUMBER := 0;
+        v_uma_count NUMBER := 0;
     BEGIN
         SELECT COUNT(*) INTO v_total_count FROM users;
         SELECT COUNT(*) INTO v_admin_count FROM users WHERE role = 'admin';
         SELECT COUNT(*) INTO v_active_count FROM users WHERE status = 'active';
+        SELECT COUNT(*) INTO v_uma_count FROM user_meeting_associations;
 
         DBMS_OUTPUT.PUT_LINE('用户表记录数: ' || v_total_count);
         DBMS_OUTPUT.PUT_LINE('管理员数量: ' || v_admin_count);
         DBMS_OUTPUT.PUT_LINE('活跃用户数: ' || v_active_count);
+        DBMS_OUTPUT.PUT_LINE('用户会议关联记录数: ' || v_uma_count);
     END;
 END;
 /
@@ -278,3 +413,35 @@ SELECT
     created_at
 FROM users
 ORDER BY created_at DESC;
+
+-- =================================================================
+-- 用户会议关联表信息
+-- =================================================================
+-- user_meeting_associations 表用于管理用户与会议的多对多关联关系
+-- 
+-- 表结构说明：
+-- - id: 自增主键（NUMBER(19)类型，通过序列实现）
+-- - user_id: 用户ID，关联users表
+-- - meeting_id: 会议ID，关联meetings表
+-- - notes: 备注信息（如请假原因、特殊说明等）
+-- - created_at: 创建时间
+-- - updated_at: 更新时间
+-- - created_by: 创建者用户ID
+-- - updated_by: 更新者用户ID
+-- 
+-- 索引优化：
+-- - 主键索引：id
+-- - 唯一索引：user_id + meeting_id（防止重复关联）
+-- - 单字段索引：user_id, meeting_id（查询优化）
+-- - 复合索引：created_at（时间范围查询）
+-- 
+-- 使用场景：
+-- - 查询用户参与的所有会议
+-- - 查询会议的所有参与者
+-- - 记录用户与会议的关联备注信息
+-- - 追踪关联记录的创建和更新历史
+
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('user_meeting_associations表已创建，支持用户与会议的多对多关联');
+END;
+/

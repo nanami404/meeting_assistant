@@ -88,7 +88,46 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- =================================================================
--- 3. 插入初始用户数据
+-- 3. 用户会议关联表 (user_meeting_associations)
+-- 实现用户与会议的多对多关系（简化版）
+-- =================================================================
+DROP TABLE IF EXISTS `user_meeting_associations`;
+CREATE TABLE `user_meeting_associations` (
+    -- 主键字段（自增long类型）
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '唯一ID（自增主键）',
+    
+    -- 必要关联字段
+    `user_id` VARCHAR(50) NOT NULL COMMENT '用户ID，关联users表',
+    `meeting_id` VARCHAR(50) NOT NULL COMMENT '会议ID，关联meetings表',
+    
+    -- 额外字段
+    `notes` TEXT DEFAULT NULL COMMENT '备注信息（如请假原因、特殊说明等）',
+    
+    -- 时间戳字段
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    
+    -- 关联字段
+    `created_by` VARCHAR(50) DEFAULT NULL COMMENT '创建者用户ID',
+    `updated_by` VARCHAR(50) DEFAULT NULL COMMENT '更新者用户ID',
+    
+    -- 主键约束
+    PRIMARY KEY (`id`),
+    
+    -- 唯一约束（确保同一用户在同一会议中只有一条记录）
+    UNIQUE KEY `uk_uma_user_meeting` (`user_id`, `meeting_id`),
+    
+    -- 普通索引
+    KEY `idx_uma_user_id` (`user_id`),
+    KEY `idx_uma_meeting_id` (`meeting_id`),
+    KEY `idx_uma_created_at` (`created_at`),
+    KEY `idx_uma_created_by` (`created_by`),
+    KEY `idx_uma_updated_by` (`updated_by`)
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户会议关联表（多对多关系，简化版）';
+
+-- =================================================================
+-- 4. 插入初始用户数据
 -- =================================================================
 -- 插入系统管理员（如果不存在）
 INSERT IGNORE INTO `users` (
@@ -146,6 +185,40 @@ INSERT IGNORE INTO `users` (
     NOW()
 );
 
+-- =================================================================
+-- 5. 插入用户会议关联示例数据
+-- =================================================================
+-- 注意：这里假设meetings表中已有一些会议数据，实际使用时需要根据具体的meeting_id进行调整
+-- 示例：创建用户与会议的关联记录
+
+-- 插入示例关联数据（如果meetings表中有对应的会议记录）
+-- INSERT IGNORE INTO `user_meeting_associations` (
+--     `user_id`,
+--     `meeting_id`,
+--     `notes`,
+--     `created_by`,
+--     `created_at`,
+--     `updated_at`
+-- ) VALUES 
+-- -- 系统管理员关联会议
+-- (
+--     'admin-user-system-00000000001',
+--     'meeting-example-id-001',  -- 需要替换为实际的meeting_id
+--     '会议组织者',
+--     'admin-user-system-00000000001',
+--     NOW(),
+--     NOW()
+-- ),
+-- -- 测试用户关联会议
+-- (
+--     'demo-user-test-000000000002',
+--     'meeting-example-id-001',  -- 需要替换为实际的meeting_id
+--     '会议参与者',
+--     'admin-user-system-00000000001',
+--     NOW(),
+--     NOW()
+-- );
+
 -- 重新启用外键检查
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -156,7 +229,8 @@ SELECT
     'MySQL用户表初始化完成！' as `消息`,
     (SELECT COUNT(*) FROM `users`) as `用户表记录数`,
     (SELECT COUNT(*) FROM `users` WHERE `role` = 'admin') as `管理员数量`,
-    (SELECT COUNT(*) FROM `users` WHERE `status` = 'active') as `活跃用户数`;
+    (SELECT COUNT(*) FROM `users` WHERE `status` = 'active') as `活跃用户数`,
+    (SELECT COUNT(*) FROM `user_meeting_associations`) as `用户会议关联记录数`;
 
 -- 显示用户列表
 SELECT
@@ -168,3 +242,33 @@ SELECT
     `created_at`
 FROM `users`
 ORDER BY `created_at` DESC;
+
+-- =================================================================
+-- 用户会议关联表信息
+-- =================================================================
+-- user_meeting_associations 表用于管理用户与会议的多对多关联关系
+-- 
+-- 表结构说明：
+-- - id: 自增主键（BIGINT类型）
+-- - user_id: 用户ID，关联users表
+-- - meeting_id: 会议ID，关联meetings表
+-- - notes: 备注信息（如请假原因、特殊说明等）
+-- - created_at: 创建时间
+-- - updated_at: 更新时间
+-- - created_by: 创建者用户ID
+-- - updated_by: 更新者用户ID
+-- 
+-- 索引优化：
+-- - 主键索引：id
+-- - 唯一索引：user_id + meeting_id（防止重复关联）
+-- - 单字段索引：user_id, meeting_id（查询优化）
+-- - 复合索引：created_at（时间范围查询）
+-- 
+-- 使用场景：
+-- - 查询用户参与的所有会议
+-- - 查询会议的所有参与者
+-- - 记录用户与会议的关联备注信息
+-- - 追踪关联记录的创建和更新历史
+
+SELECT
+    'user_meeting_associations表已创建，支持用户与会议的多对多关联' as `关联表状态`;

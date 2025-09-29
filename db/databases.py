@@ -58,7 +58,7 @@ def get_db() -> Generator[Session, None, None]:
 async_engine = create_async_engine(
     DATABASE_URL2,
     # 生产环境关闭 SQL 日志打印，开发环境可设为 True
-    echo=False,
+    echo=True,
     pool_size=30,  # 连接池大小
     max_overflow=20,  # 超出池大小的临时连接数
     pool_recycle=3600,  # 连接超时回收（秒）
