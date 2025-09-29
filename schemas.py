@@ -285,26 +285,36 @@ class UserLogin(BaseModel):
     用户登录请求模型
     
     用于用户登录验证的请求模型。
-    支持邮箱或手机号登录。
+    支持用户名、邮箱或手机号登录。
     
     Attributes:
-        username: 用户名（邮箱或手机号），必填
+        username: 用户名（用户名、邮箱或手机号），必填
         password: 密码，必填
     """
-    username: str = Field(..., min_length=1, max_length=255, description="用户名（邮箱或手机号）")
+    username: str = Field(..., min_length=1, max_length=255, description="用户名（用户名、邮箱或手机号）")
     password: str = Field(..., min_length=1, max_length=128, description="密码")
 
     @validator('username')
     def validate_username(cls, v):
         """
-        验证用户名格式：必须是有效的邮箱或手机号
+        验证用户名格式：支持用户名、邮箱或手机号
         """
+        # 去除首尾空格
+        v = v.strip()
+        
+        # 检查长度
+        if len(v) < 1 or len(v) > 255:
+            raise ValueError('用户名长度必须在1-255个字符之间')
+        
         # 检查是否为邮箱格式
         email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         # 检查是否为手机号格式
         phone_pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
+        # 检查是否为用户名格式（字母、数字、下划线、中划线）
+        username_pattern = r'^[a-zA-Z0-9_-]+$'
         
-        if not (re.match(email_pattern, v) or re.match(phone_pattern, v)):
-            raise ValueError('用户名必须是有效的邮箱地址或手机号码')
+        # 支持三种格式：邮箱、手机号、用户名
+        if not (re.match(email_pattern, v) or re.match(phone_pattern, v) or re.match(username_pattern, v)):
+            raise ValueError('用户名格式不正确，支持用户名（字母数字下划线）、邮箱地址或手机号码')
         
         return v

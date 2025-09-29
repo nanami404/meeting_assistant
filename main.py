@@ -19,6 +19,7 @@ from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
 import router
+from router import user_manage as user_router
 
 # Services
 meeting_service = MeetingService()
@@ -96,6 +97,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 manager = ConnectionManager()
 app.include_router(router.meeting_manage)
+app.include_router(user_router)
 
 if __name__ == "__main__":
     import uvicorn
