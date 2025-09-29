@@ -57,30 +57,31 @@ app.add_middleware(
 
 
 def get_ssl_paths():
-    """从.env读取并返回证书和密钥的路径（Path对象）"""
-    # 从.env获取路径字符串，若未配置则默认空值
+    """从.env读取并返回证书和密钥的路径（Path对象），若未配置或文件不存在则回退到HTTP模式"""
     cert_path_str = os.getenv("CERT_FILE_PATH", "")
     key_path_str = os.getenv("KEY_FILE_PATH", "")
 
-    # 转换为Path对象（自动处理不同系统的路径分隔符）
     cert_path = Path(cert_path_str) if cert_path_str else None
     key_path = Path(key_path_str) if key_path_str else None
 
-    # 验证路径是否存在（可选，根据需求添加）
-    if cert_path and not cert_path.exists():
-        raise FileNotFoundError(f"证书文件不存在：{cert_path}")
-    if key_path and not key_path.exists():
-        raise FileNotFoundError(f"密钥文件不存在：{key_path}")
+    # 未配置或至少有一个不存在时，回退到HTTP
+    if not cert_path or not key_path:
+        logger.warning("未配置证书路径，服务将以HTTP模式启动")
+        return None, None
+    if (cert_path and not cert_path.exists()) or (key_path and not key_path.exists()):
+        logger.warning(f"证书或密钥文件不存在：{cert_path} 或 {key_path}，服务将以HTTP模式启动")
+        return None, None
 
     return cert_path, key_path
 
 
 full_cert_path, full_key_path = get_ssl_paths()
 
-
-# 加载证书链,SSL上下文
-ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-ssl_context.load_cert_chain(certfile=str(full_cert_path), keyfile=str(full_key_path))
+# 仅当证书配置有效时加载SSL上下文
+ssl_context = None
+if full_cert_path and full_key_path:
+    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    ssl_context.load_cert_chain(certfile=str(full_cert_path), keyfile=str(full_key_path))
 
 DEFAULT_FORMAT = '{time:YYYY-MM-DD HH:mm:ss.SSS} [{level}] - {name}:{function}:{line} - {message}'
 handlers = [
@@ -98,11 +99,20 @@ app.include_router(router.meeting_manage)
 
 if __name__ == "__main__":
     import uvicorn
-    #uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-    uvicorn.run(
-        "main:app",
-        host=API_HOST,
-        port=API_PORT,
-        ssl_certfile=full_cert_path,
-        ssl_keyfile=full_key_path
-    )
+    # 根据证书配置选择HTTPS或HTTP启动
+    if full_cert_path and full_key_path:
+        logger.info(f"以HTTPS模式启动，证书: {full_cert_path}, 密钥: {full_key_path}")
+        uvicorn.run(
+            "main:app",
+            host=API_HOST,
+            port=API_PORT,
+            ssl_certfile=str(full_cert_path),
+            ssl_keyfile=str(full_key_path)
+        )
+    else:
+        logger.info("未检测到有效证书，使用HTTP模式启动")
+        uvicorn.run(
+            "main:app",
+            host=API_HOST,
+            port=API_PORT
+        )
