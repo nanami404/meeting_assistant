@@ -1,0 +1,33 @@
+version: 1
+formatters:
+    simple:
+        format: '{asctime} [{levelname}] - {name}:{funcName}:{lineno:d} - {message}'
+        style: '{'
+handlers:
+    console:
+        class: logging.StreamHandler
+        level: DEBUG
+        formatter: simple
+        stream: ext://sys.stdout
+    info-file:
+        class: logging.FileHandler
+        level: INFO
+        filename: log.log
+        formatter: simple
+    error-file:
+        class: logging.FileHandler
+        level: ERROR
+        filename: error.log
+        formatter: simple
+    access-file:
+        class: logging.FileHandler
+        level: DEBUG
+        filename: access.log
+        formatter: simple
+loggers:
+    uvicorn.access:
+        level: INFO
+        handlers: [console,access-file,error-file]
+    uvicorn.error:
+        level: INFO
+        handlers: [console,access-file,error-file]

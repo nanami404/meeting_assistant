@@ -1,0 +1,170 @@
+-- =================================================================
+-- Meeting Assistant System - MySQL用户表初始化脚本（简化版）
+-- 版本: 1.1.0
+-- 创建日期: 2024-09-26
+-- 描述: 基于User SQLAlchemy模型创建的用户管理表结构（仅包含基础结构）
+-- 注意: 外键约束和检查约束将在应用层实现
+-- =================================================================
+
+-- 设置字符集和SQL模式
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO';
+
+-- =================================================================
+-- 1. 用户主表 (users)
+-- 对应SQLAlchemy模型: User
+-- =================================================================
+DROP TABLE IF EXISTS `users`;
+CREATE TABLE `users` (
+    -- 主键字段
+    `id` VARCHAR(50) NOT NULL COMMENT '用户UUID主键',
+
+    -- 基本信息字段
+    `name` VARCHAR(100) NOT NULL COMMENT '用户姓名',
+    `user_name` VARCHAR(50) NOT NULL COMMENT '用户账号',
+    `gender` VARCHAR(20) DEFAULT NULL COMMENT '性别：male-男性，female-女性，other-其他',
+    `phone` VARCHAR(20) DEFAULT NULL COMMENT '手机号码',
+    `email` VARCHAR(255) NOT NULL COMMENT '邮箱地址',
+    `id_number` VARCHAR(18) DEFAULT NULL COMMENT '4A账号/工号',
+    `company` VARCHAR(200) DEFAULT NULL COMMENT '所属单位名称',
+
+    -- 权限和状态字段
+    `role` VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '用户角色：admin-管理员，user-普通用户',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT '用户状态：active-激活，inactive-未激活，suspended-暂停',
+
+    -- 安全信息字段
+    `password_hash` VARCHAR(255) DEFAULT NULL COMMENT '密码哈希值（bcrypt加密）',
+
+    -- 时间戳字段
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    -- 关联字段
+    `created_by` VARCHAR(50) DEFAULT NULL COMMENT '创建者用户ID',
+    `updated_by` VARCHAR(50) DEFAULT NULL COMMENT '更新者用户ID',
+
+    -- 主键约束
+    PRIMARY KEY (`id`),
+
+    -- 唯一键约束
+    UNIQUE KEY `uk_users_email` (`email`),
+    UNIQUE KEY `uk_users_phone` (`phone`),
+    UNIQUE KEY `uk_users_user_name` (`user_name`),
+    UNIQUE KEY `uk_users_id_number` (`id_number`),
+
+    -- 普通索引（对应SQLAlchemy的Index定义）
+    KEY `idx_users_email` (`email`),
+    KEY `idx_users_phone` (`phone`),
+    KEY `idx_users_user_name` (`user_name`),
+    KEY `idx_users_role` (`role`),
+    KEY `idx_users_status` (`status`),
+    KEY `idx_users_company` (`company`),
+    KEY `idx_users_created_at` (`created_at`),
+    KEY `idx_users_created_by` (`created_by`),
+    KEY `idx_users_updated_by` (`updated_by`)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户信息表';
+
+-- =================================================================
+-- 2. 更新现有meetings表，添加用户关联字段
+-- =================================================================
+-- 检查meetings表是否存在created_by字段，如果不存在则添加
+SET @sql = IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'meetings'
+     AND COLUMN_NAME = 'created_by') = 0,
+    'ALTER TABLE `meetings`
+     ADD COLUMN `created_by` VARCHAR(50) DEFAULT NULL COMMENT "创建者用户ID" AFTER `updated_at`,
+     ADD COLUMN `updated_by` VARCHAR(50) DEFAULT NULL COMMENT "更新者用户ID" AFTER `created_by`,
+     ADD KEY `idx_meetings_created_by` (`created_by`),
+     ADD KEY `idx_meetings_updated_by` (`updated_by`)',
+    'SELECT "meetings表用户字段已存在" as message'
+);
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- =================================================================
+-- 3. 插入初始用户数据
+-- =================================================================
+-- 插入系统管理员（如果不存在）
+INSERT IGNORE INTO `users` (
+    `id`,
+    `name`,
+    `user_name`,
+    `email`,
+    `role`,
+    `status`,
+    `password_hash`,
+    `created_at`,
+    `updated_at`
+) VALUES (
+    'admin-user-system-00000000001',
+    '系统管理员',
+    'admin',
+    'admin@meeting-system.com',
+    'admin',
+    'active',
+    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LwdQwZgDiocCRKxYa', -- 默认密码: admin123456
+    NOW(),
+    NOW()
+);
+
+-- 插入测试普通用户（如果不存在）
+INSERT IGNORE INTO `users` (
+    `id`,
+    `name`,
+    `user_name`,
+    `email`,
+    `gender`,
+    `phone`,
+    `id_number`,
+    `company`,
+    `role`,
+    `status`,
+    `password_hash`,
+    `created_by`,
+    `created_at`,
+    `updated_at`
+) VALUES (
+    'demo-user-test-000000000002',
+    '测试用户',
+    'demo_user',
+    'demo@meeting-system.com',
+    'other',
+    '13800138000',
+    '20240001',
+    '示例科技有限公司',
+    'user',
+    'active',
+    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LwdQwZgDiocCRKxYa', -- 默认密码: admin123456
+    'admin-user-system-00000000001',
+    NOW(),
+    NOW()
+);
+
+-- 重新启用外键检查
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- =================================================================
+-- 初始化完成提示
+-- =================================================================
+SELECT
+    'MySQL用户表初始化完成！' as `消息`,
+    (SELECT COUNT(*) FROM `users`) as `用户表记录数`,
+    (SELECT COUNT(*) FROM `users` WHERE `role` = 'admin') as `管理员数量`,
+    (SELECT COUNT(*) FROM `users` WHERE `status` = 'active') as `活跃用户数`;
+
+-- 显示用户列表
+SELECT
+    `id`,
+    `name`,
+    `email`,
+    `role`,
+    `status`,
+    `created_at`
+FROM `users`
+ORDER BY `created_at` DESC;

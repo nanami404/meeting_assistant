@@ -1,0 +1,112 @@
+# 排除虚拟环境
+.venv/
+venv/
+env/
+.env/
+.env
+# 排除Python缓存和编译文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 排除IDE和编辑器配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+.DS_Store
+Thumbs.db
+
+# 排除日志文件
+*.log
+logs/
+meeting-assistant-*.log
+error.log
+log.log
+
+# 排除测试和覆盖率报告
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# 排除本地配置文件
+.env
+.env.local
+.env.*.local
+
+# 排除数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 排除临时文件和上传文件
+temp/
+temp_audio/
+uploads/
+static/uploads/
+
+# 排除Git相关文件
+.git/
+.gitignore
+.gitattributes
+
+# 排除Docker相关文件
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+
+# 排除依赖管理锁定文件
+Pipfile.lock
+poetry.lock
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 排除SSL证书文件（敏感信息）
+*.crt
+*.key
+*.pem
+*.p12
+
+# 排除系统文件
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 排除README和文档（构建时不需要）
+README*
+*.md
+docs/
+
+# 排除测试文件
+test/
+tests/
+*_test.py
+test_*.py
