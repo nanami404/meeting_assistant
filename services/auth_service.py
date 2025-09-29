@@ -27,7 +27,7 @@ class AuthService:
 
     def __init__(self):
         # 环境变量配置
-        self.JWT_SECRET = os.getenv("JWT_SECRET", "")
+        self.JWT_SECRET = os.getenv("JWT_SECRET", "apkMJPa1m693UbMu1PvA1xPi7oExmXoDYqOaCHafMEM")
         self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
         self.ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
         self.REFRESH_TOKEN_EXPIRE_MINUTES = int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", "43200"))  # 默认30天
