@@ -1,35 +1,88 @@
 # 标准库
 import uuid
 from datetime import datetime
+from enum import Enum
 
 # 第三方库
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, Enum, Index, Table
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, Index
 from sqlalchemy.orm import relationship
-import enum
 
 # 自定义库
 from db.databases import Base
 
-# 枚举定义
-class UserRole(enum.Enum):
+
+class UserRole(str, Enum):
     """用户角色枚举"""
-    admin = "admin"  # 管理员
-    user = "user"    # 普通用户
+    ADMIN = "admin"
+    USER = "user"
 
-class UserStatus(enum.Enum):
+
+class UserStatus(str, Enum):
     """用户状态枚举"""
-    active = "active"        # 激活
-    inactive = "inactive"    # 未激活
-    suspended = "suspended"  # 暂停
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
 
-# 用户-会议关联表（多对多关系）
-user_meeting_association = Table(
-    'user_meetings',
-    Base.metadata,
-    Column('user_id', String(50), ForeignKey('users.id'), primary_key=True),
-    Column('meeting_id', String(50), ForeignKey('meetings.id'), primary_key=True),
-    Column('created_at', DateTime, default=datetime.utcnow)
-)
+
+class GenderType(str, Enum):
+    """性别类型枚举"""
+    MALE = "male"
+    FEMALE = "female"
+    OTHER = "other"
+
+
+class User(Base):
+    """用户模型 - 管理系统用户信息"""
+    __tablename__ = "users"
+
+    # 主键字段
+    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()), comment="用户UUID主键")
+
+    # 基本信息字段
+    name = Column(String(100), nullable=False, comment="用户姓名")
+    user_name = Column(String(50), nullable=False, unique=True, comment="用户账号")
+    gender = Column(String(20), nullable=True, comment="性别：male-男性，female-女性，other-其他")
+    phone = Column(String(20), nullable=True, unique=True, comment="手机号码")
+    email = Column(String(255), nullable=False, unique=True, comment="邮箱地址")
+    id_number = Column(String(18), nullable=True, unique=True, comment="4A账号/工号")
+    company = Column(String(200), nullable=True, comment="所属单位名称")
+
+    # 权限和状态字段
+    role = Column(String(20), nullable=False, default=UserRole.USER.value, comment="用户角色：admin-管理员，user-普通用户")
+    status = Column(String(20), nullable=False, default=UserStatus.ACTIVE.value, comment="用户状态：active-激活，inactive-未激活，suspended-暂停")
+
+    # 安全信息字段
+    password_hash = Column(String(255), nullable=True, comment="密码哈希值（bcrypt加密）")
+
+    # 时间戳字段
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, comment="创建时间")
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+
+    # 关联字段
+    created_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
+    updated_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="更新者用户ID")
+
+    # 关联关系
+    created_meetings = relationship("Meeting", foreign_keys="Meeting.created_by", back_populates="creator")
+    updated_meetings = relationship("Meeting", foreign_keys="Meeting.updated_by", back_populates="updater")
+
+    # 自引用关系
+    creator_user = relationship("User", foreign_keys=[created_by], remote_side=[id])
+    updater_user = relationship("User", foreign_keys=[updated_by], remote_side=[id])
+
+    # 添加索引
+    __table_args__ = (
+        Index('idx_users_email', 'email'),
+        Index('idx_users_phone', 'phone'),
+        Index('idx_users_user_name', 'user_name'),
+        Index('idx_users_role', 'role'),
+        Index('idx_users_status', 'status'),
+        Index('idx_users_company', 'company'),
+        Index('idx_users_created_at', 'created_at'),
+        Index('idx_users_created_by', 'created_by'),
+        Index('idx_users_updated_by', 'updated_by'),
+    )
+
 
 class Meeting(Base):
     __tablename__ = "meetings"
@@ -44,11 +97,18 @@ class Meeting(Base):
     status = Column(String(50), default="scheduled")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # 用户关联字段
+    created_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
+    updated_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="更新者用户ID")
+
     # Relationships
     participants = relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
     transcriptions = relationship("Transcription", back_populates="meeting", cascade="all, delete-orphan")
-    # 与用户的多对多关系
-    users = relationship("User", secondary=user_meeting_association, back_populates="meetings")
+
+    # 用户关联关系
+    creator = relationship("User", foreign_keys=[created_by], back_populates="created_meetings")
+    updater = relationship("User", foreign_keys=[updated_by], back_populates="updated_meetings")
 
 class Participant(Base):
     __tablename__ = "participants"
@@ -80,62 +140,3 @@ class Transcription(Base):
     is_decision = Column(Boolean, default=False)
     # Relationships
     meeting = relationship("Meeting", back_populates="transcriptions")
-
-class User(Base):
-    """
-    用户模型
-    
-    用于管理系统用户信息，包括基本信息、身份信息、安全信息和审计信息。
-    支持与会议的多对多关联关系，实现用户参与会议的管理。
-    
-    字段说明:
-    - 基础字段: id(主键), name(姓名), gender(性别), phone(电话), email(邮箱)
-    - 身份字段: id_number(证件号), company(公司), role(角色), status(状态)
-    - 安全字段: password_hash(密码哈希)
-    - 审计字段: created_at(创建时间), updated_at(更新时间), created_by(创建人), updated_by(更新人)
-    """
-    __tablename__ = "users"
-    
-    # 主键字段
-    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
-    
-    # 基础字段
-    name = Column(String(100), nullable=False, comment="用户姓名")
-    gender = Column(String(20), nullable=True, comment="性别：male-男性，female-女性，other-其他")
-    phone = Column(String(20), nullable=True, comment="手机号码")
-    email = Column(String(255), nullable=False, comment="邮箱地址")
-    
-    # 身份字段
-    id_number = Column(String(18), nullable=True, comment="证件号码/工号")
-    company = Column(String(200), nullable=True, comment="所属公司/单位")
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.user, comment="用户角色")
-    status = Column(Enum(UserStatus), nullable=False, default=UserStatus.active, comment="用户状态")
-    
-    # 安全字段
-    password_hash = Column(String(255), nullable=True, comment="密码哈希值（bcrypt加密）")
-    
-    # 审计字段
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, comment="创建时间")
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
-    created_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
-    updated_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="更新者用户ID")
-    
-    # 关联关系
-    # 与会议的多对多关系
-    meetings = relationship("Meeting", secondary=user_meeting_association, back_populates="users")
-    
-    # 自引用关系（创建者和更新者）
-    creator = relationship("User", remote_side=[id], foreign_keys=[created_by], post_update=True)
-    updater = relationship("User", remote_side=[id], foreign_keys=[updated_by], post_update=True)
-    
-    # 索引定义
-    __table_args__ = (
-        Index('idx_users_email', 'email'),
-        Index('idx_users_phone', 'phone'),
-        Index('idx_users_role', 'role'),
-        Index('idx_users_status', 'status'),
-        Index('idx_users_company', 'company'),
-        Index('idx_users_created_at', 'created_at'),
-        Index('idx_users_created_by', 'created_by'),
-        Index('idx_users_updated_by', 'updated_by'),
-    )
