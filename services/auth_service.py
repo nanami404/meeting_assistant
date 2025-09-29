@@ -1,7 +1,7 @@
 # 标准库
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,timezone
 from typing import Optional, Tuple, Dict, Any
 import re
 
@@ -69,7 +69,7 @@ class AuthService:
 
     # --------------------------- 令牌生成 ---------------------------
     def _build_claims(self, user: User, token_type: str, expires_minutes: int, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         jti = uuid.uuid4().hex
         payload: Dict[str, Any] = {
             "sub": user.id,
