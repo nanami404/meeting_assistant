@@ -178,9 +178,23 @@ class UserCreate(UserBase):
     包含密码字段并进行强度验证。
     
     Attributes:
+        user_name: 用户账号，必填
         password: 用户密码，必填，进行强度验证
     """
+    user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
     password: str = Field(..., min_length=8, max_length=128, description="用户密码")
+
+    @validator('user_name')
+    def validate_user_name(cls, v):
+        """
+        验证用户账号格式：字母、数字、下划线、中划线，长度 3-50
+        """
+        v = v.strip()
+        if len(v) < 3 or len(v) > 50:
+            raise ValueError('用户名长度必须在3-50个字符之间')
+        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
+            raise ValueError('用户名仅支持字母、数字、下划线和中划线')
+        return v
 
     @validator('password')
     def validate_password(cls, v):
@@ -270,6 +284,7 @@ class UserResponse(UserBase):
         created_by: 创建者用户ID，可选
         updated_by: 更新者用户ID，可选
     """
+    user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
     id: str = Field(..., description="用户唯一标识")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

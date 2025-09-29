@@ -44,20 +44,6 @@
 
    应用将在 `http://localhost:8000` 启动，API文档可在 `http://localhost:8000/docs` 查看。
 
-### Docker 部署
-
-```bash
-# 构建镜像
-docker build -t meeting-assistant .
-
-# 运行容器
-docker run -d \
-  --name meeting-assistant \
-  -p 8000:8000 \
-  -v $(pwd)/.env:/app/.env \
-  meeting-assistant
-```
-
 ## 📁 项目结构
 
 ```
@@ -79,6 +65,14 @@ docker run -d \
 创建 `.env` 文件并配置以下参数：
 
 ```env
+# JWT Configuration
+JWT_SECRET=123456
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_MINUTES=43200
+JWT_ISSUER=meeting-assistant
+JWT_AUDIENCE=meeting-assistant-clients
+
 # 数据库配置
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
