@@ -112,6 +112,7 @@ async def profile(current_user: User = Depends(require_auth)):
     try:
         data = UserResponse(
             id=current_user.id,
+            user_name=current_user.user_name,
             name=current_user.name,
             email=current_user.email,
             gender=current_user.gender,
@@ -143,6 +144,7 @@ async def create_user(
         user = await user_service.create_user(db, payload, created_by=current_user.id)
         data = UserResponse(
             id=user.id,
+            user_name=user.user_name,
             name=user.name,
             email=user.email,
             gender=user.gender,
@@ -185,6 +187,7 @@ async def list_users(
         for u in items:
             data_items.append(UserResponse(
                 id=u.id,
+                user_name=u.user_name,
                 name=u.name,
                 email=u.email,
                 gender=u.gender,
@@ -213,6 +216,7 @@ async def get_user(user_id: str, db: Session = Depends(get_db), current_user: Us
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         data = UserResponse(
             id=user.id,
+            user_name=user.user_name,
             name=user.name,
             email=user.email,
             gender=user.gender,
@@ -243,6 +247,7 @@ async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(g
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         data = UserResponse(
             id=user.id,
+            user_name=user.user_name,
             name=user.name,
             email=user.email,
             gender=user.gender,
