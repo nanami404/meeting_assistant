@@ -324,7 +324,7 @@ INSERT INTO users (
     'admin@meeting-system.com',
     'admin',
     'active',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LwdQwZgDiocCRKxYa', -- 默认密码: admin123456
+    '$2b$12$zxFePkIgN2qEX8NY6Y22OO2XDYaqwOKrgc5Tvpleh6UQDfhzTniBu', -- 默认密码: admin123456
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 );
@@ -356,7 +356,7 @@ INSERT INTO users (
     '示例科技有限公司',
     'user',
     'active',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LwdQwZgDiocCRKxYa', -- 默认密码: admin123456
+    '$2b$12$zxFePkIgN2qEX8NY6Y22OO2XDYaqwOKrgc5Tvpleh6UQDfhzTniBu', -- 默认密码: admin123456
     'admin-user-system-00000000001',
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
