@@ -66,7 +66,12 @@ class User(Base):
     created_meetings = relationship("Meeting", foreign_keys="Meeting.created_by", back_populates="creator")
     updated_meetings = relationship("Meeting", foreign_keys="Meeting.updated_by", back_populates="updater")
     # 用户与会议的关联关系（多对多，通过中间表）
-    meeting_associations = relationship("UserMeetingAssociation", back_populates="user", cascade="all, delete-orphan")
+    meeting_associations = relationship(
+        "UserMeetingAssociation",
+        foreign_keys="UserMeetingAssociation.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 
     # 自引用关系
     creator_user = relationship("User", foreign_keys=[created_by], remote_side=[id])
