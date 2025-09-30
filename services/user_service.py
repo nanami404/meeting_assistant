@@ -85,6 +85,76 @@ class UserService(object):
             db.rollback()
             raise e
 
+    async def get_users_basic(
+        self,
+        db: Session,
+        page: int = 1,
+        page_size: int = 20,
+        name_keyword: Optional[str] = None,
+        company_keyword: Optional[str] = None,
+        order_by: str = "name",
+        order: str = "asc",
+    ) -> Tuple[List[User], int]:
+        """获取用户基础信息列表（公共接口专用）
+        
+        专门用于公共接口，支持按用户名和部门进行模糊查询。
+        仅返回活跃状态的用户，用于业务场景如创建会议时选择指定用户。
+        
+        Args:
+            db: 数据库会话
+            page: 页码，从1开始
+            page_size: 每页数量，默认20
+            name_keyword: 用户姓名关键词（模糊匹配）
+            company_keyword: 部门/单位关键词（模糊匹配）
+            order_by: 排序字段，默认按姓名排序
+            order: 排序方向，asc/desc，默认升序
+            
+        Returns:
+            Tuple[List[User], int]: (用户列表, 总数)
+        """
+        try:
+            # 基础查询：仅查询活跃状态的用户
+            query = db.query(User).filter(User.status == UserStatus.ACTIVE.value)
+            
+            # 按用户姓名模糊匹配
+            if name_keyword:
+                query = query.filter(User.name.like(f"%{name_keyword}%"))
+            
+            # 按部门/单位模糊匹配
+            if company_keyword:
+                query = query.filter(User.company.like(f"%{company_keyword}%"))
+
+            # 获取总数
+            total = query.count()
+
+            # 排序
+            valid_order_fields = ["name", "company", "created_at"]
+            if order_by not in valid_order_fields:
+                order_by = "name"
+            
+            sort_col = getattr(User, order_by, User.name)
+            if order.lower() == "desc":
+                query = query.order_by(sort_col.desc())
+            else:
+                query = query.order_by(sort_col.asc())
+
+            # 分页
+            if page < 1:
+                page = 1
+            if page_size < 1:
+                page_size = 20
+            if page_size > 100:  # 限制最大页面大小
+                page_size = 100
+                
+            items = query.offset((page - 1) * page_size).limit(page_size).all()
+            
+            logger.info(f"公共接口查询用户列表: 页码={page}, 页大小={page_size}, 总数={total}")
+            return items, total
+            
+        except Exception as e:
+            logger.error(f"公共接口查询用户列表失败: {e}")
+            raise e
+
     async def get_users(
         self,
         db: Session,
@@ -93,6 +163,11 @@ class UserService(object):
         role: Optional[str] = None,
         status: Optional[str] = None,
         keyword: Optional[str] = None,
+        name_keyword: Optional[str] = None,
+        user_name_keyword: Optional[str] = None,
+        email_keyword: Optional[str] = None,
+        company_keyword: Optional[str] = None,
+        id_number_keyword: Optional[str] = None,
         order_by: str = "created_at",
         order: str = "desc",
     ) -> Tuple[List[User], int]:
@@ -106,6 +181,8 @@ class UserService(object):
                 query = query.filter(User.role == role)
             if status:
                 query = query.filter(User.status == status)
+            
+            # 原有的通用关键词匹配（保持向后兼容）
             if keyword:
                 like = f"%{keyword}%"
                 query = query.filter(
@@ -117,6 +194,18 @@ class UserService(object):
                         User.id_number.like(like),
                     )
                 )
+            
+            # 独立字段的模糊匹配（AND 关系）
+            if name_keyword:
+                query = query.filter(User.name.like(f"%{name_keyword}%"))
+            if user_name_keyword:
+                query = query.filter(User.user_name.like(f"%{user_name_keyword}%"))
+            if email_keyword:
+                query = query.filter(User.email.like(f"%{email_keyword}%"))
+            if company_keyword:
+                query = query.filter(User.company.like(f"%{company_keyword}%"))
+            if id_number_keyword:
+                query = query.filter(User.id_number.like(f"%{id_number_keyword}%"))
 
             total = query.count()
 

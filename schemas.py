@@ -295,6 +295,32 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
+class UserBasicResponse(BaseModel):
+    """
+    用户基础信息响应模型
+    
+    用于公共接口返回用户基础信息，主要用于业务场景如创建会议时选择指定用户。
+    仅包含必要的基础字段，不包含敏感信息。
+    
+    Attributes:
+        id: 用户唯一标识
+        name: 用户姓名
+        user_name: 用户账号
+        phone: 手机号码
+        company: 部门/单位名称
+        email: 邮箱地址
+    """
+    id: str = Field(..., description="用户唯一标识")
+    name: str = Field(..., description="用户姓名")
+    user_name: str = Field(..., description="用户账号")
+    phone: Optional[str] = Field(None, description="手机号码")
+    company: Optional[str] = Field(None, description="部门/单位名称")
+    email: EmailStr = Field(..., description="邮箱地址")
+
+    class Config:
+        from_attributes = True
+
+
 class UserLogin(BaseModel):
     """
     用户登录请求模型

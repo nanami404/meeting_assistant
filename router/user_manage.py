@@ -12,7 +12,7 @@ from services.user_service import UserService
 from services.auth_service import AuthService
 from services.auth_dependencies import get_current_user, require_auth, require_admin
 from services.service_models import User, UserStatus
-from schemas import UserLogin, UserCreate, UserUpdate, UserResponse
+from schemas import UserLogin, UserCreate, UserUpdate, UserResponse, UserBasicResponse
 
 router = APIRouter(prefix="/api", tags=["Users & Auth"])
 
@@ -106,17 +106,18 @@ async def refresh(
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 
+# ============================= 用户信息相关 =============================
 @router.get("/auth/profile", summary="获取当前用户信息", response_model=dict)
 async def profile(current_user: User = Depends(require_auth)):
-    """返回当前用户的安全信息（过滤敏感字段）"""
+    """获取当前登录用户的详细信息"""
     try:
-        data = UserResponse(
+        user_data = UserResponse(
             id=current_user.id,
-            user_name=current_user.user_name,
             name=current_user.name,
-            email=current_user.email,
+            user_name=current_user.user_name,
             gender=current_user.gender,
             phone=current_user.phone,
+            email=current_user.email,
             id_number=current_user.id_number,
             company=current_user.company,
             role=current_user.role,
@@ -124,31 +125,108 @@ async def profile(current_user: User = Depends(require_auth)):
             created_at=current_user.created_at,
             updated_at=current_user.updated_at,
             created_by=current_user.created_by,
-            updated_by=current_user.updated_by,
+            updated_by=current_user.updated_by
         )
-        return _resp(data.dict())
+        return _resp(user_data.dict())
     except Exception as e:
-        logger.error(f"获取用户Profile异常: {e}")
+        logger.error(f"获取用户信息异常: {e}")
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 
-# ============================= 用户管理 =============================
+# ============================= 公共接口 =============================
+@router.get("/public/users", summary="公共用户列表查询", response_model=dict)
+async def list_users_public(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1, description="页码，从1开始"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量，最大100"),
+    name_keyword: Optional[str] = Query(None, description="用户姓名关键词（模糊匹配）"),
+    company_keyword: Optional[str] = Query(None, description="部门/单位关键词（模糊匹配）"),
+    order_by: str = Query("name", description="排序字段：name（姓名）、company（部门）、created_at（创建时间）"),
+    order: str = Query("asc", description="排序方向：asc（升序）、desc（降序）")
+):
+    """
+    公共用户列表查询接口
+    
+    - 支持按用户姓名和部门进行模糊查询
+    - 仅返回活跃状态的用户基础信息
+    - 主要用于业务场景如创建会议时选择指定用户
+    - 无需认证，作为公共接口开放给其他业务系统调用
+    
+    **查询参数说明：**
+    - name_keyword: 按用户姓名进行模糊匹配
+    - company_keyword: 按部门/单位进行模糊匹配
+    - 多个查询条件之间为AND关系
+    
+    **返回数据说明：**
+    - 仅返回用户基础信息：ID、姓名、用户名、手机号、邮箱、部门
+    - 自动过滤非活跃状态用户
+    - 支持分页和排序
+    """
+    try:
+        users, total = await user_service.get_users_basic(
+            db=db,
+            page=page,
+            page_size=page_size,
+            name_keyword=name_keyword,
+            company_keyword=company_keyword,
+            order_by=order_by,
+            order=order
+        )
+        
+        # 转换为基础响应格式
+        user_list = []
+        for user in users:
+            user_basic = UserBasicResponse(
+                id=user.id,
+                name=user.name,
+                user_name=user.user_name,
+                phone=user.phone,
+                email=user.email,
+                company=user.company
+            )
+            user_list.append(user_basic.dict())
+        
+        # 计算分页信息
+        total_pages = (total + page_size - 1) // page_size
+        has_next = page < total_pages
+        has_prev = page > 1
+        
+        result = {
+            "users": user_list,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": total_pages,
+                "has_next": has_next,
+                "has_prev": has_prev
+            }
+        }
+        
+        return _resp(result)
+        
+    except Exception as e:
+        logger.error(f"公共用户列表查询异常: {e}")
+        _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
+
+
+# ============================= 管理员用户管理 =============================
 @router.post("/users/", summary="创建用户", response_model=dict)
 async def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    """创建新用户（管理员权限）"""
+    """创建新用户（仅管理员）"""
     try:
         user = await user_service.create_user(db, payload, created_by=current_user.id)
-        data = UserResponse(
+        user_data = UserResponse(
             id=user.id,
-            user_name=user.user_name,
             name=user.name,
-            email=user.email,
+            user_name=user.user_name,
             gender=user.gender,
             phone=user.phone,
+            email=user.email,
             id_number=user.id_number,
             company=user.company,
             role=user.role,
@@ -156,13 +234,11 @@ async def create_user(
             created_at=user.created_at,
             updated_at=user.updated_at,
             created_by=user.created_by,
-            updated_by=user.updated_by,
+            updated_by=user.updated_by
         )
-        return _resp(data.dict())
-    except HTTPException:
-        raise
+        return _resp(user_data.dict())
     except ValueError as ve:
-        _raise(status.HTTP_400_BAD_REQUEST, str(ve), "bad_request")
+        _raise(status.HTTP_400_BAD_REQUEST, str(ve), "validation_error")
     except Exception as e:
         logger.error(f"创建用户异常: {e}")
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
@@ -176,13 +252,32 @@ async def list_users(
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
     role: Optional[str] = Query(None, description="角色过滤"),
     status_: Optional[str] = Query(None, alias="status", description="状态过滤"),
-    keyword: Optional[str] = Query(None, description="关键词模糊匹配(支持姓名、账号、邮箱、单位、4A账号)"),
+    keyword: Optional[str] = Query(None, description="通用关键词模糊匹配（姓名、账号、邮箱、单位、4A账号）"),
+    name_keyword: Optional[str] = Query(None, description="姓名模糊匹配"),
+    user_name_keyword: Optional[str] = Query(None, description="用户账号模糊匹配"),
+    email_keyword: Optional[str] = Query(None, description="邮箱模糊匹配"),
+    company_keyword: Optional[str] = Query(None, description="单位模糊匹配"),
+    id_number_keyword: Optional[str] = Query(None, description="4A账号/工号模糊匹配"),
     order_by: str = Query("created_at", description="排序字段"),
     order: str = Query("desc", description="排序方向(desc/asc)")
 ):
     """获取用户列表（管理员权限）"""
     try:
-        items, total = await user_service.get_users(db, page, page_size, role, status_, keyword, order_by, order)
+        items, total = await user_service.get_users(
+            db=db,
+            page=page,
+            page_size=page_size,
+            role=role,
+            status=status_,
+            keyword=keyword,
+            name_keyword=name_keyword,
+            user_name_keyword=user_name_keyword,
+            email_keyword=email_keyword,
+            company_keyword=company_keyword,
+            id_number_keyword=id_number_keyword,
+            order_by=order_by,
+            order=order,
+        )
         data_items: List[dict] = []
         for u in items:
             data_items.append(UserResponse(
