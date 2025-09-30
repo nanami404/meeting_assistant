@@ -36,7 +36,7 @@ class UsersAuthAPITester:
         
         self.user_credentials = {
             "username": "demo_user", 
-            "password": "Admin123456"
+            "password": "123456"
         }
         
         # 存储令牌信息

@@ -304,8 +304,12 @@ async def list_users(
 
 @router.get("/users/{user_id}", summary="获取用户详情", response_model=dict)
 async def get_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
-    """获取用户详情（登录可访问）"""
+    """获取用户详情（权限控制：普通用户只能查询自己的信息，管理员可以查询任意用户信息）"""
     try:
+        # 权限检查：普通用户只能查询自己的信息，管理员可以查询任意用户信息
+        if current_user.role != "admin" and current_user.id != user_id:
+            _raise(status.HTTP_403_FORBIDDEN, "权限不足，只能查询自己的用户信息", "forbidden")
+        
         user = await user_service.get_user_by_id(db, user_id)
         if not user:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
