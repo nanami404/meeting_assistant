@@ -176,7 +176,7 @@ async def list_users(
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
     role: Optional[str] = Query(None, description="角色过滤"),
     status_: Optional[str] = Query(None, alias="status", description="状态过滤"),
-    keyword: Optional[str] = Query(None, description="关键词"),
+    keyword: Optional[str] = Query(None, description="关键词模糊匹配(支持姓名、账号、邮箱、单位、4A账号)"),
     order_by: str = Query("created_at", description="排序字段"),
     order: str = Query("desc", description="排序方向(desc/asc)")
 ):

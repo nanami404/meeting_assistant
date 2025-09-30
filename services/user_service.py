@@ -114,6 +114,7 @@ class UserService(object):
                         User.email.like(like),
                         User.company.like(like),
                         User.user_name.like(like),
+                        User.id_number.like(like),
                     )
                 )
 
