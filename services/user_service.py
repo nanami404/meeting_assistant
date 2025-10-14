@@ -21,48 +21,27 @@ class UserService(object):
     所有方法使用 async 定义以保持一致的异步接口风格，内部使用同步 Session 操作。
     """
 
-    async def create_user(self, db: Session, user_data: UserCreate, created_by: Optional[str] = None) -> User:
+    async def create_user(self, db: Session, user_data: UserCreate, created_by: Optional[int] = None) -> User:
         """创建新用户（包含密码加密与唯一性检查）
         - 使用 bcrypt 对密码进行加密存储
-        - 检查 email / user_name / phone / id_number 的唯一性
+        - 唯一性校验对齐初始化脚本：仅校验 user_name
         """
         try:
-            # 唯一性检查
-            conflicts = db.query(User).filter(
-                or_(
-                    User.email == user_data.email,
-                    User.user_name == user_data.user_name,
-                    and_(User.phone.isnot(None), User.phone == user_data.phone) if user_data.phone else False,
-                    and_(User.id_number.isnot(None), User.id_number == user_data.id_number) if user_data.id_number else False,
-                )
-            ).all()
-            if conflicts:
-                # 明确说明冲突字段
-                conflict_fields = []
-                for u in conflicts:
-                    if u.email == user_data.email:
-                        conflict_fields.append("email")
-                    if u.user_name == user_data.user_name:
-                        conflict_fields.append("user_name")
-                    if user_data.phone and u.phone == user_data.phone:
-                        conflict_fields.append("phone")
-                    if user_data.id_number and u.id_number == user_data.id_number:
-                        conflict_fields.append("id_number")
-                conflict_fields = list(set(conflict_fields))
-                raise ValueError(f"唯一性冲突: {', '.join(conflict_fields)} 已被占用")
+            # 唯一性检查（仅用户名）
+            exists = db.query(User).filter(User.user_name == user_data.user_name).first()
+            if exists:
+                raise ValueError("user_name 已被占用")
 
             # 加密密码
             hashed = bcrypt.hashpw(user_data.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
             # 创建用户
             user = User(
-                id=str(uuid.uuid4()),
                 name=user_data.name,
                 user_name=user_data.user_name,
                 gender=user_data.gender,
                 phone=user_data.phone,
                 email=user_data.email,
-                id_number=user_data.id_number,
                 company=user_data.company,
                 role=user_data.role or UserRole.USER.value,
                 status=user_data.status or UserStatus.ACTIVE.value,
@@ -167,7 +146,6 @@ class UserService(object):
         user_name_keyword: Optional[str] = None,
         email_keyword: Optional[str] = None,
         company_keyword: Optional[str] = None,
-        id_number_keyword: Optional[str] = None,
         order_by: str = "created_at",
         order: str = "desc",
     ) -> Tuple[List[User], int]:
@@ -191,7 +169,6 @@ class UserService(object):
                         User.email.like(like),
                         User.company.like(like),
                         User.user_name.like(like),
-                        User.id_number.like(like),
                     )
                 )
             
@@ -204,8 +181,7 @@ class UserService(object):
                 query = query.filter(User.email.like(f"%{email_keyword}%"))
             if company_keyword:
                 query = query.filter(User.company.like(f"%{company_keyword}%"))
-            if id_number_keyword:
-                query = query.filter(User.id_number.like(f"%{id_number_keyword}%"))
+            # 去除 id_number 相关过滤（对齐初始化脚本）
 
             total = query.count()
 
@@ -227,7 +203,7 @@ class UserService(object):
             logger.error(f"查询用户列表失败: {e}")
             raise e
 
-    async def get_user_by_id(self, db: Session, user_id: str) -> Optional[User]:
+    async def get_user_by_id(self, db: Session, user_id: int) -> Optional[User]:
         """根据ID获取用户"""
         try:
             return db.query(User).filter(User.id == user_id).first()
@@ -286,14 +262,14 @@ class UserService(object):
             logger.error(f"根据登录标识符查询用户失败(identifier={identifier}): {e}")
             raise e
 
-    async def update_user(self, db: Session, user_id: str, update_data: UserUpdate, updated_by: Optional[str] = None) -> Optional[User]:
+    async def update_user(self, db: Session, user_id: int, update_data: UserUpdate, updated_by: Optional[int] = None) -> Optional[User]:
         """更新用户信息（包含唯一性检查）"""
         try:
             user = db.query(User).filter(User.id == user_id).first()
             if not user:
                 return None
 
-            # 如果更新 email / user_name / phone / id_number，需要检查唯一性
+            # 如果更新 user_name，需要检查唯一性（对齐初始化脚本）
             def check_unique(field_name: str, new_value: Optional[str]):
                 if new_value is None:
                     return
@@ -301,14 +277,11 @@ class UserService(object):
                 if exists:
                     raise ValueError(f"{field_name} 已被占用")
 
-            check_unique("email", update_data.email if hasattr(update_data, "email") else None)
             check_unique("user_name", update_data.user_name if hasattr(update_data, "user_name") else None)
-            check_unique("phone", update_data.phone)
-            check_unique("id_number", update_data.id_number)
 
             # 应用更新（仅更新提供的字段）
             for field in [
-                "name", "gender", "phone", "email", "id_number", "company", "role", "status"
+                "name", "gender", "phone", "email", "company", "role", "status"
             ]:
                 value = getattr(update_data, field, None)
                 if value is not None:
@@ -332,7 +305,7 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def delete_user(self, db: Session, user_id: str, operator_id: Optional[str] = None) -> bool:
+    async def delete_user(self, db: Session, user_id: int, operator_id: Optional[int] = None) -> bool:
         """软删除用户：将用户状态置为 inactive，而非物理删除"""
         try:
             user = db.query(User).filter(User.id == user_id).first()
@@ -360,7 +333,7 @@ class UserService(object):
             logger.error(f"验证密码失败(user={user.id}): {e}")
             return False
 
-    async def change_user_status(self, db: Session, user_id: str, status: str, operator_id: Optional[str] = None) -> bool:
+    async def change_user_status(self, db: Session, user_id: int, status: str, operator_id: Optional[int] = None) -> bool:
         """修改用户状态：active / inactive / suspended"""
         try:
             if status not in [UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value]:

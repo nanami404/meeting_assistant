@@ -118,7 +118,6 @@ async def profile(current_user: User = Depends(require_auth)):
             gender=current_user.gender,
             phone=current_user.phone,
             email=current_user.email,
-            id_number=current_user.id_number,
             company=current_user.company,
             role=current_user.role,
             status=current_user.status,
@@ -227,7 +226,6 @@ async def create_user(
             gender=user.gender,
             phone=user.phone,
             email=user.email,
-            id_number=user.id_number,
             company=user.company,
             role=user.role,
             status=user.status,
@@ -257,7 +255,6 @@ async def list_users(
     user_name_keyword: Optional[str] = Query(None, description="用户账号模糊匹配"),
     email_keyword: Optional[str] = Query(None, description="邮箱模糊匹配"),
     company_keyword: Optional[str] = Query(None, description="单位模糊匹配"),
-    id_number_keyword: Optional[str] = Query(None, description="4A账号/工号模糊匹配"),
     order_by: str = Query("created_at", description="排序字段"),
     order: str = Query("desc", description="排序方向(desc/asc)")
 ):
@@ -274,7 +271,6 @@ async def list_users(
             user_name_keyword=user_name_keyword,
             email_keyword=email_keyword,
             company_keyword=company_keyword,
-            id_number_keyword=id_number_keyword,
             order_by=order_by,
             order=order,
         )
@@ -287,7 +283,6 @@ async def list_users(
                 email=u.email,
                 gender=u.gender,
                 phone=u.phone,
-                id_number=u.id_number,
                 company=u.company,
                 role=u.role,
                 status=u.status,
@@ -303,7 +298,7 @@ async def list_users(
 
 
 @router.get("/users/{user_id}", summary="获取用户详情", response_model=dict)
-async def get_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
+async def get_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
     """获取用户详情（权限控制：普通用户只能查询自己的信息，管理员可以查询任意用户信息）"""
     try:
         # 权限检查：普通用户只能查询自己的信息，管理员可以查询任意用户信息
@@ -320,7 +315,6 @@ async def get_user(user_id: str, db: Session = Depends(get_db), current_user: Us
             email=user.email,
             gender=user.gender,
             phone=user.phone,
-            id_number=user.id_number,
             company=user.company,
             role=user.role,
             status=user.status,
@@ -338,7 +332,7 @@ async def get_user(user_id: str, db: Session = Depends(get_db), current_user: Us
 
 
 @router.put("/users/{user_id}", summary="更新用户信息", response_model=dict)
-async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """更新用户信息（管理员权限）"""
     try:
         user = await user_service.update_user(db, user_id, payload, updated_by=current_user.id)
@@ -351,7 +345,6 @@ async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(g
             email=user.email,
             gender=user.gender,
             phone=user.phone,
-            id_number=user.id_number,
             company=user.company,
             role=user.role,
             status=user.status,
@@ -371,7 +364,7 @@ async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(g
 
 
 @router.delete("/users/{user_id}", summary="删除用户(软删除)", response_model=dict)
-async def delete_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+async def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """软删除用户（管理员权限）"""
     try:
         ok = await user_service.delete_user(db, user_id, operator_id=current_user.id)
@@ -386,7 +379,7 @@ async def delete_user(user_id: str, db: Session = Depends(get_db), current_user:
 
 
 @router.patch("/users/{user_id}/status", summary="修改用户状态", response_model=dict)
-async def change_status(user_id: str, status_: str = Query(..., alias="status"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+async def change_status(user_id: int, status_: str = Query(..., alias="status"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """修改用户状态（管理员权限）"""
     try:
         if status_ not in [UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value]:

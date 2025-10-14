@@ -137,7 +137,6 @@ class UserBase(BaseModel):
     email: EmailStr = Field(..., description="邮箱地址")
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
-    id_number: Optional[str] = Field(None, max_length=18, description="证件号码/工号")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
     role: str = Field(default="user", description="用户角色")
     status: str = Field(default="active", description="用户状态")
@@ -230,7 +229,6 @@ class UserUpdate(BaseModel):
         name: 用户姓名，可选
         gender: 性别，可选
         phone: 手机号码，可选
-        id_number: 证件号码/工号，可选
         company: 所属公司/单位，可选
         role: 用户角色，可选（仅管理员可修改）
         status: 用户状态，可选（仅管理员可修改）
@@ -238,10 +236,10 @@ class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="用户姓名")
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
-    id_number: Optional[str] = Field(None, max_length=18, description="证件号码/工号")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
     role: Optional[str] = Field(None, description="用户角色")
     status: Optional[str] = Field(None, description="用户状态")
+    email: Optional[EmailStr] = Field(None, description="邮箱地址")
 
     @validator('gender')
     def validate_gender(cls, v):
@@ -285,11 +283,11 @@ class UserResponse(UserBase):
         updated_by: 更新者用户ID，可选
     """
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
-    id: str = Field(..., description="用户唯一标识")
+    id: int = Field(..., description="用户唯一标识")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
-    created_by: Optional[str] = Field(None, description="创建者用户ID")
-    updated_by: Optional[str] = Field(None, description="更新者用户ID")
+    created_by: Optional[int] = Field(None, description="创建者用户ID")
+    updated_by: Optional[int] = Field(None, description="更新者用户ID")
 
     class Config:
         from_attributes = True
@@ -310,7 +308,7 @@ class UserBasicResponse(BaseModel):
         company: 部门/单位名称
         email: 邮箱地址
     """
-    id: str = Field(..., description="用户唯一标识")
+    id: int = Field(..., description="用户唯一标识")
     name: str = Field(..., description="用户姓名")
     user_name: str = Field(..., description="用户账号")
     phone: Optional[str] = Field(None, description="手机号码")
