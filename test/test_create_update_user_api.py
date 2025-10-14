@@ -138,6 +138,33 @@ class CreateUpdateUserAPITester:
         assert updated["company"] == payload["company"], "用户公司更新失败"
         assert updated["gender"] == payload["gender"], "用户性别更新失败"
 
+    def test_update_user_email_set_value(self, user_id: int, current_name: str, current_user_name: str):
+        """管理员更新邮箱为非空值，验证可持久化"""
+        new_email = f"updated_{datetime.now().strftime('%Y%m%d_%H%M%S')}@example.com"
+        payload = {"name": current_name, "user_name": current_user_name, "email": new_email}
+        resp = self.make_request("PUT", f"/api/users/{user_id}", headers=self.get_auth_headers("admin"), json_data=payload)
+        data = self.assert_response(resp, 200, "更新用户邮箱为非空")
+        updated = data["data"]
+        assert updated["email"] == new_email, "用户邮箱更新为非空失败"
+
+        # 再次获取详情确认
+        resp_detail = self.make_request("GET", f"/api/users/{user_id}", headers=self.get_auth_headers("admin"))
+        detail = self.assert_response(resp_detail, 200, "更新邮箱后获取详情")
+        assert detail["data"]["email"] == new_email, "获取详情邮箱未更新"
+
+    def test_update_user_email_clear_value(self, user_id: int, current_name: str, current_user_name: str):
+        """管理员将邮箱置为 null，验证可清空并持久化"""
+        payload = {"name": current_name, "user_name": current_user_name, "email": None}
+        resp = self.make_request("PUT", f"/api/users/{user_id}", headers=self.get_auth_headers("admin"), json_data=payload)
+        data = self.assert_response(resp, 200, "清空用户邮箱为null")
+        updated = data["data"]
+        assert updated["email"] is None, "用户邮箱清空失败"
+
+        # 再次获取详情确认
+        resp_detail = self.make_request("GET", f"/api/users/{user_id}", headers=self.get_auth_headers("admin"))
+        detail = self.assert_response(resp_detail, 200, "清空邮箱后获取详情")
+        assert detail["data"]["email"] is None, "获取详情邮箱未清空"
+
     # 错误用例
     def test_create_user_missing_required(self):
         # 缺少 name
@@ -214,6 +241,16 @@ class CreateUpdateUserAPITester:
 
             self.test_login_with_default_password(created_user_name)
             self.test_update_user_success(user_id, created_user_name)
+
+            # 获取当前用户详情，用于邮箱更新所需的必填字段
+            resp_detail2 = self.make_request("GET", f"/api/users/{user_id}", headers=self.get_auth_headers("admin"))
+            detail2 = self.assert_response(resp_detail2, 200, "获取用户详情(用于邮箱更新)")
+            current_name = detail2["data"]["name"]
+            current_user_name = detail2["data"]["user_name"]
+
+            # 邮箱更新用例：设置非空、再置空
+            self.test_update_user_email_set_value(user_id, current_name, current_user_name)
+            self.test_update_user_email_clear_value(user_id, current_name, current_user_name)
 
             # 错误路径
             self.test_create_user_missing_required()

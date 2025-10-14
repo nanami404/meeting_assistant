@@ -269,11 +269,16 @@ class UserService(object):
             raise e
 
     async def update_user(self, db: Session, user_id: int, update_data: UserUpdate, updated_by: Optional[int] = None) -> Optional[User]:
-        """更新用户信息（包含唯一性检查）"""
+        """更新用户信息（包含唯一性检查）
+        - 仅更新请求中显式提供的字段（即使值为 None 也会应用），以支持将可选字段置空
+        """
         try:
             user = db.query(User).filter(User.id == user_id).first()
             if not user:
                 return None
+
+            # 仅对请求中显式提供的字段进行处理
+            provided = update_data.model_dump(exclude_unset=True)
 
             # 如果更新 user_name，需要检查唯一性（对齐初始化脚本）
             def check_unique(field_name: str, new_value: Optional[str]):
@@ -283,15 +288,13 @@ class UserService(object):
                 if exists:
                     raise ValueError(f"{field_name} 已被占用")
 
-            check_unique("user_name", update_data.user_name if hasattr(update_data, "user_name") else None)
+            if "user_name" in provided:
+                check_unique("user_name", provided.get("user_name"))
 
-            # 应用更新（仅更新提供的字段）
-            for field in [
-                "name", "user_name", "gender", "phone", "email", "company", "role", "status"
-            ]:
-                value = getattr(update_data, field, None)
-                if value is not None:
-                    setattr(user, field, value)
+            # 应用更新（包括显式置为 None 的可选字段）
+            for field in ["name", "user_name", "gender", "phone", "email", "company", "role", "status"]:
+                if field in provided:
+                    setattr(user, field, provided.get(field))
 
             # 审计字段
             if updated_by:
@@ -381,5 +384,25 @@ class UserService(object):
             raise ve
         except Exception as e:
             logger.error(f"修改用户状态失败(id={user_id}): {e}")
+            db.rollback()
+            raise e
+
+    async def reset_password(self, db: Session, user_id: int, operator_id: Optional[int] = None, default_password: str = "Test@1234") -> bool:
+        """重置用户密码为默认值（bcrypt加密），返回是否成功"""
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return False
+            # 生成新的密码哈希
+            hashed = bcrypt.hashpw(default_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            user.password_hash = hashed
+            if operator_id:
+                user.updated_by = operator_id
+            user.updated_at = datetime.utcnow()
+            db.commit()
+            logger.info(f"用户密码已重置: user_id={user_id}")
+            return True
+        except Exception as e:
+            logger.error(f"重置用户密码失败(id={user_id}): {e}")
             db.rollback()
             raise e

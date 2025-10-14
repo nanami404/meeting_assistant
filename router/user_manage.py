@@ -396,3 +396,18 @@ async def change_status(user_id: int, status_: str = Query(..., alias="status"),
     except Exception as e:
         logger.error(f"修改用户状态异常: {e}")
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
+
+
+@router.post("/users/{user_id}/reset_password", summary="重置用户密码为默认值(仅管理员)", response_model=dict)
+async def reset_password(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    """重置指定用户密码为默认值（管理员权限）"""
+    try:
+        ok = await user_service.reset_password(db, user_id, operator_id=current_user.id)
+        if not ok:
+            _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
+        return _resp({"user_id": user_id, "reset": True})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"重置用户密码异常: {e}")
+        _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
