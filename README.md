@@ -108,6 +108,67 @@ EMAIL_PASSWORD=your_password
 - `POST /meetings/{meeting_id}/transcriptions` - 保存转录记录
 - `WS /ws/{client_id}` - WebSocket连接
 
+#### 用户与认证 API
+
+- `POST /api/auth/register` - 匿名注册为一般用户
+  - 请求体（UserCreate）：`{ name, user_name, password, email?, gender?, phone?, company? }`
+  - 说明：`role` 强制为 `user`；注册场景必须提供有效 `password`
+  - 响应体：`{ code, message, data: UserResponse }`
+
+- `POST /api/auth/login` - 用户登录
+  - 请求体（UserLogin）：`{ "username": "用户名/邮箱/手机号", "password": "密码" }`
+  - 响应体：`{ code, message, data: { access_token, refresh_token } }`
+
+- `POST /api/auth/refresh` - 刷新令牌（令牌轮换）
+  - 请求头：`Authorization: Bearer <refresh_token>`
+  - 响应体：`{ code, message, data: { access_token, refresh_token } }`
+  - 说明：旧 `refresh_token` 进入黑名单，返回新的 `access_token` 与 `refresh_token`
+
+- `POST /api/auth/logout` - 登出并撤销令牌
+  - 请求头：`Authorization: Bearer <access_token>`
+  - 响应体：`{ code, message, data: { revoked: true } }`
+
+- `GET /api/auth/profile` - 获取当前登录用户信息
+  - 请求头：`Authorization: Bearer <access_token>`
+  - 响应体：`{ code, message, data: UserResponse }`
+
+- `GET /api/public/users` - 公共用户列表（无需认证）
+  - 查询参数：`page=1`、`page_size=20(<=100)`、`name_keyword?`、`company_keyword?`、`order_by=name|company|created_at`、`order=asc|desc`
+  - 响应体：`{ code, message, data: { items: UserBasicResponse[], total, page, page_size } }`
+
+#### 用户管理 API（管理员）
+
+- `GET /api/users/` - 获取用户列表（支持多条件筛选与排序）
+  - 查询参数：`page=1`、`page_size=20(<=200)`、`role?`、`status?`、`keyword?`、`name_keyword?`、`user_name_keyword?`、`email_keyword?`、`company_keyword?`、`order_by`、`order`
+  - 请求头：`Authorization: Bearer <access_token>`（需管理员）
+  - 响应体：`{ code, message, data: { items: UserResponse[], total, page, page_size } }`
+
+- `POST /api/users/` - 创建用户（管理员）
+  - 请求体（UserCreate）：`{ name, user_name, password?, email?, gender?, phone?, company?, role?, status? }`
+  - 说明：未提供 `password` 时使用默认值 `Test@1234`
+  - 响应体：`{ code, message, data: UserResponse }`
+
+- `GET /api/users/{user_id}` - 获取用户详情
+  - 权限：普通用户仅能查询自己的信息；管理员可查询任意用户
+  - 请求头：`Authorization: Bearer <access_token>`
+  - 响应体：`{ code, message, data: UserResponse }`
+
+- `PUT /api/users/{user_id}` - 更新用户信息（管理员）
+  - 请求体（UserUpdate）：`{ name, user_name, gender?, phone?, company?, role?, status? }`
+  - 响应体：`{ code, message, data: UserResponse }`
+
+- `POST /api/users/{user_id}/reset_password` - 重置指定用户密码为默认值（管理员）
+  - 请求头：`Authorization: Bearer <access_token>`
+  - 响应体：`{ code, message, data: { user_id, reset: true } }`
+
+说明：除 `GET /api/public/users` 外，以上接口均需携带认证头 `Authorization: Bearer <access_token>`。
+
+认证与令牌说明：
+- `access_token` 有效期由 `ACCESS_TOKEN_EXPIRE_MINUTES` 控制（默认 30 分钟）
+- `refresh_token` 有效期由 `REFRESH_TOKEN_EXPIRE_MINUTES` 控制（默认 43200 分钟）
+- 刷新令牌采用令牌轮换机制，旧 `refresh_token` 在刷新后立即失效进入黑名单
+- 支持用户名、邮箱或手机号三种登录方式
+
 #### 消息通知 API
 
 - `POST /api/messages/send` - 发送消息
