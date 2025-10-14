@@ -11,7 +11,7 @@ from loguru import logger
 import bcrypt
 
 # 自定义模块
-from .service_models import User, UserRole, UserStatus
+from .service_models import User, UserRole, UserStatus, Meeting
 from schemas import UserCreate, UserUpdate
 
 
@@ -203,10 +203,16 @@ class UserService(object):
             logger.error(f"查询用户列表失败: {e}")
             raise e
 
-    async def get_user_by_id(self, db: Session, user_id: int) -> Optional[User]:
-        """根据ID获取用户"""
+    async def get_user_by_id(self, db: Session, user_id: int, active_only: bool = True) -> Optional[User]:
+        """根据ID获取用户
+        - active_only=True：仅返回活跃用户（用于非管理员或公共查询场景）
+        - active_only=False：返回任意状态用户（用于管理员场景）
+        """
         try:
-            return db.query(User).filter(User.id == user_id).first()
+            query = db.query(User).filter(User.id == user_id)
+            if active_only:
+                query = query.filter(User.status == UserStatus.ACTIVE.value)
+            return query.first()
         except Exception as e:
             logger.error(f"查询用户失败(id={user_id}): {e}")
             raise e
@@ -305,21 +311,42 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def delete_user(self, db: Session, user_id: int, operator_id: Optional[int] = None) -> bool:
-        """软删除用户：将用户状态置为 inactive，而非物理删除"""
+    async def delete_user(self, db: Session, user_id: int, operator_id: Optional[int] = None, hard: bool = False) -> bool:
+        """删除用户
+        - 默认软删除：将用户状态置为 inactive
+        - 硬删除(hard=True)：物理删除用户，并清理与用户相关的外键引用（置空）
+        """
         try:
             user = db.query(User).filter(User.id == user_id).first()
             if not user:
                 return False
-            user.status = UserStatus.INACTIVE.value
-            if operator_id:
-                user.updated_by = operator_id
-            user.updated_at = datetime.utcnow()
+
+            if not hard:
+                # 软删除：仅状态置为inactive
+                user.status = UserStatus.INACTIVE.value
+                if operator_id:
+                    user.updated_by = operator_id
+                user.updated_at = datetime.utcnow()
+                db.commit()
+                logger.info(f"已软删除用户: {user_id}")
+                return True
+
+            # 硬删除：清理引用并物理删除
+            # 1) 清理会议记录中的 created_by / updated_by 引用
+            db.query(Meeting).filter(Meeting.created_by == user_id).update({Meeting.created_by: None})
+            db.query(Meeting).filter(Meeting.updated_by == user_id).update({Meeting.updated_by: None})
+
+            # 2) 清理其他用户记录中的 created_by / updated_by 自引用
+            db.query(User).filter(User.created_by == user_id).update({User.created_by: None})
+            db.query(User).filter(User.updated_by == user_id).update({User.updated_by: None})
+
+            # 3) 删除用户本身
+            db.delete(user)
             db.commit()
-            logger.info(f"已软删除用户: {user_id}")
+            logger.info(f"已硬删除用户并清理引用: {user_id}")
             return True
         except Exception as e:
-            logger.error(f"软删除用户失败(id={user_id}): {e}")
+            logger.error(f"删除用户失败(id={user_id}, hard={hard}): {e}")
             db.rollback()
             raise e
 

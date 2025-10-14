@@ -363,14 +363,17 @@ async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(g
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 
-@router.delete("/users/{user_id}", summary="删除用户(软删除)", response_model=dict)
-async def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
-    """软删除用户（管理员权限）"""
+@router.delete("/users/{user_id}", summary="删除用户(软/硬删除)", response_model=dict)
+async def delete_user(user_id: int, hard: bool = Query(False, description="是否执行硬删除(物理删除并清理引用)"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    """删除用户（管理员权限）
+    - 默认软删除：将用户状态置为inactive
+    - hard=true：物理删除用户并清理相关引用
+    """
     try:
-        ok = await user_service.delete_user(db, user_id, operator_id=current_user.id)
+        ok = await user_service.delete_user(db, user_id, operator_id=current_user.id, hard=hard)
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
-        return _resp({"deleted": True})
+        return _resp({"deleted": True, "hard": hard})
     except HTTPException:
         raise
     except Exception as e:
