@@ -134,7 +134,7 @@ class UserBase(BaseModel):
         status: 用户状态，默认为active，限制为active/inactive/suspended
     """
     name: str = Field(..., min_length=1, max_length=100, description="用户姓名")
-    email: EmailStr = Field(..., description="邮箱地址")
+    email: Optional[EmailStr] = Field(None, description="邮箱地址")
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
@@ -334,7 +334,7 @@ class UserBasicResponse(BaseModel):
     user_name: str = Field(..., description="用户账号")
     phone: Optional[str] = Field(None, description="手机号码")
     company: Optional[str] = Field(None, description="部门/单位名称")
-    email: EmailStr = Field(..., description="邮箱地址")
+    email: Optional[EmailStr] = Field(None, description="邮箱地址")
 
     class Config:
         from_attributes = True

@@ -43,7 +43,7 @@ class User(Base):
     user_name = Column(String(50), nullable=False, unique=True, comment="用户账号")
     gender = Column(String(20), nullable=True, comment="性别：male-男性，female-女性，other-其他")
     phone = Column(String(20), nullable=True, comment="手机号码")
-    email = Column(String(255), nullable=False, comment="邮箱地址")
+    email = Column(String(255), nullable=True, comment="邮箱地址")
     company = Column(String(200), nullable=True, comment="所属单位名称")
 
     # 权限和状态字段

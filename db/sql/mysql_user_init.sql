@@ -25,7 +25,7 @@ CREATE TABLE `users` (
     `user_name` VARCHAR(50) NOT NULL COMMENT '用户账号',
     `gender` VARCHAR(20) DEFAULT NULL COMMENT '性别：male-男性，female-女性，other-其他',
     `phone` VARCHAR(20) DEFAULT NULL COMMENT '手机号码',
-    `email` VARCHAR(255) NOT NULL COMMENT '邮箱地址',
+    `email` VARCHAR(255) DEFAULT NULL COMMENT '邮箱地址',
     `company` VARCHAR(200) DEFAULT NULL COMMENT '所属单位名称',
 
     -- 权限和状态字段
