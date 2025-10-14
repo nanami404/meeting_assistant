@@ -101,9 +101,24 @@ def test_normal_user_access_others_info():
     
     token = login_result["data"]["access_token"]
     
-    # 尝试查询其他用户的信息（使用admin用户的ID）
-    other_user_id = "admin-user-system-00000000001"  # 使用管理员用户的ID
+    # 登录管理员获取真实ID
+    admin_login = login_user("admin", "Admin123456")
+    if not admin_login.get("data", {}).get("access_token"):
+        log_test("管理员登录用于获取ID", False, "登录失败，无法获取管理员ID")
+        return
+    admin_token = admin_login["data"]["access_token"]
     
+    admin_profile = requests.get(
+        f"{BASE_URL}/auth/profile",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=10,
+    )
+    if admin_profile.status_code != 200:
+        log_test("获取管理员用户信息", False, f"无法获取管理员ID: {admin_profile.status_code}")
+        return
+    other_user_id = admin_profile.json()["data"]["id"]
+    
+    # 普通用户查询管理员信息，应返回403
     response = get_user_detail(other_user_id, token)
     
     if response.status_code == 403:
@@ -123,8 +138,23 @@ def test_admin_access_any_user_info():
     
     token = login_result["data"]["access_token"]
     
-    # 管理员查询任意用户信息（使用demo_user的ID）
-    test_user_id = "demo-user-test-000000000002"  # 使用默认测试用户的ID
+    # 登录 demo_user 获取真实ID
+    demo_login = login_user("demo_user", "123456")
+    if not demo_login.get("data", {}).get("access_token"):
+        log_test("获取被查询用户ID", False, "demo_user登录失败，无法获取ID")
+        return
+    demo_token = demo_login["data"]["access_token"]
+    
+    demo_profile = requests.get(
+        f"{BASE_URL}/auth/profile",
+        headers={"Authorization": f"Bearer {demo_token}"},
+        timeout=10,
+    )
+    if demo_profile.status_code != 200:
+        log_test("获取被查询用户信息", False, f"无法获取demo_user ID: {demo_profile.status_code}")
+        return
+    test_user_id = demo_profile.json()["data"]["id"]
+    
     response = get_user_detail(test_user_id, token)
     
     # 管理员应该能够查询任意用户，即使用户不存在也应该返回404而不是403
@@ -139,7 +169,8 @@ def test_unauthorized_access():
     print("\n=== 测试4: 未登录用户访问 ===")
     
     try:
-        response = requests.get(f"{BASE_URL}/users/any-user-id", timeout=10)
+        # 使用有效的整数型ID以触发鉴权逻辑，而非422参数错误
+        response = requests.get(f"{BASE_URL}/users/1", timeout=10)
         if response.status_code == 401:
             log_test("未登录访问", True, "正确返回401未授权")
         else:

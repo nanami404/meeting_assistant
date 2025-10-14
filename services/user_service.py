@@ -32,8 +32,9 @@ class UserService(object):
             if exists:
                 raise ValueError("user_name 已被占用")
 
-            # 加密密码
-            hashed = bcrypt.hashpw(user_data.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            # 加密密码（支持未提供密码时使用默认密码）
+            plain_password = user_data.password or "Test@1234"
+            hashed = bcrypt.hashpw(plain_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
             # 创建用户
             user = User(
@@ -46,8 +47,7 @@ class UserService(object):
                 role=user_data.role or UserRole.USER.value,
                 status=user_data.status or UserStatus.ACTIVE.value,
                 password_hash=hashed,
-                created_by=created_by,
-                # created_at/updated_at 由模型默认处理
+                created_by=created_by
             )
 
             db.add(user)
@@ -281,7 +281,7 @@ class UserService(object):
 
             # 应用更新（仅更新提供的字段）
             for field in [
-                "name", "gender", "phone", "email", "company", "role", "status"
+                "name", "user_name", "gender", "phone", "email", "company", "role", "status"
             ]:
                 value = getattr(update_data, field, None)
                 if value is not None:

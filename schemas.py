@@ -178,10 +178,14 @@ class UserCreate(UserBase):
     
     Attributes:
         user_name: 用户账号，必填
-        password: 用户密码，必填，进行强度验证
+        role: 角色，选填，默认 user（admin/user）
+        email: 邮箱，选填
+        password: 用户密码，选填；未提供时使用默认值 Test@1234
     """
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
-    password: str = Field(..., min_length=8, max_length=128, description="用户密码")
+    # 覆盖父类字段以满足创建用户必填/选填要求
+    email: Optional[EmailStr] = Field(None, description="邮箱地址")
+    password: Optional[str] = Field(None, min_length=8, max_length=128, description="用户密码")
 
     @validator('user_name')
     def validate_user_name(cls, v):
@@ -202,6 +206,9 @@ class UserCreate(UserBase):
         - 至少8位字符
         - 包含大写字母、小写字母、数字和特殊字符中的至少3种
         """
+        if v is None:
+            # 未提供密码时将由服务层使用默认密码
+            return v
         if len(v) < 8:
             raise ValueError('密码长度至少为8位')
         
@@ -222,18 +229,20 @@ class UserUpdate(BaseModel):
     """
     更新用户请求模型
     
-    用于更新用户信息的请求，所有字段都是可选的。
+    用于更新用户信息的请求，姓名(name)与账号(user_name)为必填，其他字段可选。
     不包含密码字段，密码更新需要单独的接口。
     
     Attributes:
-        name: 用户姓名，可选
+        name: 用户姓名，必填
+        user_name: 用户账号，必填
         gender: 性别，可选
         phone: 手机号码，可选
         company: 所属公司/单位，可选
         role: 用户角色，可选（仅管理员可修改）
         status: 用户状态，可选（仅管理员可修改）
     """
-    name: Optional[str] = Field(None, min_length=1, max_length=100, description="用户姓名")
+    name: str = Field(..., min_length=1, max_length=100, description="用户姓名")
+    user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
@@ -253,6 +262,18 @@ class UserUpdate(BaseModel):
             pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
             if not re.match(pattern, v):
                 raise ValueError('手机号格式不正确')
+        return v
+
+    @validator('user_name')
+    def validate_user_name(cls, v):
+        """
+        验证用户账号格式：字母、数字、下划线、中划线，长度 3-50
+        """
+        v = v.strip()
+        if len(v) < 3 or len(v) > 50:
+            raise ValueError('用户名长度必须在3-50个字符之间')
+        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
+            raise ValueError('用户名仅支持字母、数字、下划线和中划线')
         return v
 
     @validator('role')

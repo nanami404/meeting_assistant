@@ -72,7 +72,7 @@ class AuthService:
         now = datetime.now(timezone.utc)
         jti = uuid.uuid4().hex
         payload: Dict[str, Any] = {
-            "sub": user.id,
+            "sub": str(user.id),
             "email": user.email,
             "role": user.role,
             "type": token_type,
@@ -91,6 +91,12 @@ class AuthService:
         """生成 access_token 与 refresh_token"""
         access_payload = self._build_claims(user, token_type="access", expires_minutes=self.ACCESS_TOKEN_EXPIRE_MINUTES)
         refresh_payload = self._build_claims(user, token_type="refresh", expires_minutes=self.REFRESH_TOKEN_EXPIRE_MINUTES)
+
+        # 诊断日志：确认 sub 为字符串
+        try:
+            logger.debug(f"JWT payload types: access.sub={type(access_payload.get('sub'))}, refresh.sub={type(refresh_payload.get('sub'))}")
+        except Exception:
+            pass
 
         access_token = jwt.encode(access_payload, self.JWT_SECRET, algorithm=self.JWT_ALGORITHM)
         refresh_token = jwt.encode(refresh_payload, self.JWT_SECRET, algorithm=self.JWT_ALGORITHM)
