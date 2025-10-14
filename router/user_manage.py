@@ -10,8 +10,8 @@ from loguru import logger
 from db.databases import get_db
 from services.user_service import UserService
 from services.auth_service import AuthService
-from services.auth_dependencies import get_current_user, require_auth, require_admin
-from services.service_models import User, UserStatus
+from services.auth_dependencies import require_auth, require_admin
+from services.service_models import User, UserStatus, UserRole
 from schemas import UserLogin, UserCreate, UserUpdate, UserResponse, UserBasicResponse
 
 router = APIRouter(prefix="/api", tags=["Users & Auth"])
@@ -239,6 +239,57 @@ async def create_user(
         _raise(status.HTTP_400_BAD_REQUEST, str(ve), "validation_error")
     except Exception as e:
         logger.error(f"创建用户异常: {e}")
+        _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
+
+
+# ============================= 用户注册（固定一般用户） =============================
+@router.post("/auth/register", summary="匿名用户注册（角色固定为一般用户）", response_model=dict)
+async def register_user(
+    payload: UserCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    匿名用户注册接口：
+    - 角色强制设置为一般用户（user）
+    - 创建人设置为 null（匿名注册）
+    - 包含必要的参数校验与错误处理
+    - 密码由服务层进行bcrypt哈希安全存储
+    """
+    try:
+        # 密码必填校验（与管理员创建不同，这里要求注册必须提供密码）
+        if not payload.password or not payload.password.strip():
+            _raise(status.HTTP_422_UNPROCESSABLE_ENTITY, "注册需提供有效密码", "validation_error")
+
+        # 强制角色为一般用户
+        payload.role = UserRole.USER.value
+
+        # 创建用户（匿名：creator=None）
+        user = await user_service.create_user(db, payload, created_by=None)
+
+        # 构造响应
+        user_data = UserResponse(
+            id=user.id,
+            name=user.name,
+            user_name=user.user_name,
+            gender=user.gender,
+            phone=user.phone,
+            email=user.email,
+            company=user.company,
+            role=user.role,
+            status=user.status,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            created_by=user.created_by,
+            updated_by=user.updated_by
+        )
+        return _resp(user_data.dict(), message="注册成功")
+    except HTTPException:
+        # 透传显式的HTTP异常
+        raise
+    except ValueError as ve:
+        _raise(status.HTTP_400_BAD_REQUEST, str(ve), "validation_error")
+    except Exception as e:
+        logger.error(f"用户注册异常: {e}")
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
 
 
