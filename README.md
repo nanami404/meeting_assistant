@@ -108,6 +108,34 @@ EMAIL_PASSWORD=your_password
 - `POST /meetings/{meeting_id}/transcriptions` - 保存转录记录
 - `WS /ws/{client_id}` - WebSocket连接
 
+#### 消息通知 API
+
+- `POST /api/messages/send` - 发送消息
+  - 请求体：`{ "title": "标题", "content": "内容", "receiver_id": 2 }`
+  - 响应体：`{ code, message, data: { id, title, content, sender_id, receiver_id, is_read, created_at, updated_at } }`
+
+- `GET /api/messages/list` - 获取当前用户消息列表（支持分页与已读状态过滤）
+  - 查询参数：`page`（默认1）、`page_size`（默认20，最大100）、`is_read`（可选，`true`/`false`）
+  - 响应体：`{ code, message, data: { messages: MessageResponse[], pagination: { page, page_size, total, total_pages, has_next, has_prev } } }`
+
+- `POST /api/messages/mark-read` - 标记单条消息为已读
+  - 请求体：`{ "message_id": 123 }`
+  - 响应体：`{ code, message, data: { updated: true } }`
+
+- `POST /api/messages/mark-all-read` - 全部标记为已读（当前用户）
+  - 请求体：无
+  - 响应体：`{ code, message, data: { updated_count: N } }`
+
+- `POST /api/messages/delete` - 删除单条消息（仅限当前用户自己的消息）
+  - 请求体：`{ "message_id": 123 }`
+  - 响应体：`{ code, message, data: { deleted: true } }`
+
+- `POST /api/messages/delete-by-type` - 按类型批量删除
+  - 请求体：`{ "type": "read" | "unread" | "all" }`
+  - 响应体：`{ code, message, data: { deleted_count: N } }`
+
+说明：以上接口均需携带认证头 `Authorization: Bearer <access_token>`，接口返回格式与用户管理保持一致。
+
 ## 🛠️ 技术栈
 
 - **后端**: FastAPI + SQLAlchemy + MySQL

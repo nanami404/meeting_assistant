@@ -248,44 +248,44 @@ class UserUpdate(BaseModel):
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
     role: Optional[str] = Field(None, description="用户角色")
     status: Optional[str] = Field(None, description="用户状态")
-    email: Optional[EmailStr] = Field(None, description="邮箱地址")
 
-    @validator('gender')
-    def validate_gender(cls, v):
-        if v is not None and v not in ['male', 'female', 'other']:
-            raise ValueError('性别必须为male、female或other')
-        return v
 
-    @validator('phone')
-    def validate_phone(cls, v):
-        if v is not None:
-            pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
-            if not re.match(pattern, v):
-                raise ValueError('手机号格式不正确')
-        return v
+# ==================== 消息通知相关模型 ====================
 
-    @validator('user_name')
-    def validate_user_name(cls, v):
-        """
-        验证用户账号格式：字母、数字、下划线、中划线，长度 3-50
-        """
-        v = v.strip()
-        if len(v) < 3 or len(v) > 50:
-            raise ValueError('用户名长度必须在3-50个字符之间')
-        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('用户名仅支持字母、数字、下划线和中划线')
-        return v
+class MessageCreate(BaseModel):
+    """发送消息请求模型"""
+    title: str
+    content: str
+    receiver_id: int
 
-    @validator('role')
-    def validate_role(cls, v):
-        if v is not None and v not in ['admin', 'user']:
-            raise ValueError('用户角色必须为admin或user')
-        return v
+class MessageResponse(BaseModel):
+    """消息响应模型"""
+    id: int
+    title: str
+    content: str
+    sender_id: int
+    receiver_id: int
+    is_read: bool
+    created_at: datetime
+    updated_at: datetime
 
-    @validator('status')
-    def validate_status(cls, v):
-        if v is not None and v not in ['active', 'inactive', 'suspended']:
-            raise ValueError('用户状态必须为active、inactive或suspended')
+    class Config:
+        from_attributes = True
+
+class MarkReadRequest(BaseModel):
+    message_id: int
+
+class DeleteMessageRequest(BaseModel):
+    message_id: int
+
+class DeleteByTypeRequest(BaseModel):
+    type: str  # read | unread | all
+
+    @validator('type')
+    def validate_type(cls, v):
+        v = v.lower().strip()
+        if v not in ['read', 'unread', 'all']:
+            raise ValueError('type 必须为 read、unread 或 all')
         return v
 
 

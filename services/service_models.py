@@ -136,3 +136,32 @@ class Transcription(Base):
     is_decision = Column(Boolean, default=False)
 
     meeting = relationship("Meeting", back_populates="transcriptions")
+
+
+class Message(Base):
+    """消息模型 - 用户消息通知"""
+    __tablename__ = "messages"
+
+    # 主键（BIGINT 自增）
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID（自增）")
+
+    # 内容
+    title = Column(String(100), nullable=False, comment="消息标题")
+    content = Column(Text, nullable=False, comment="消息内容")
+
+    # 关联用户
+    sender_id = Column(BigInteger, nullable=False, comment="发送者ID")
+    receiver_id = Column(BigInteger, nullable=False, comment="接收者ID")
+
+    # 状态与时间戳
+    is_read = Column(Boolean, nullable=False, default=False, comment="是否已读(0未读/1已读)")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, comment="创建时间")
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+
+    # 索引
+    __table_args__ = (
+        Index('idx_messages_sender_id', 'sender_id'),
+        Index('idx_messages_receiver_id', 'receiver_id'),
+        Index('idx_messages_is_read', 'is_read'),
+        Index('idx_messages_created_at', 'created_at'),
+    )

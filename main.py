@@ -97,6 +97,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 manager = ConnectionManager()
 app.include_router(router.meeting_manage)
+app.include_router(router.message_manage)
 app.include_router(user_router)
 
 if __name__ == "__main__":
