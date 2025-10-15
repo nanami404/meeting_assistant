@@ -31,8 +31,16 @@ jobs:
               echo "✨ 未发现 venv，正在创建..."
               python3 -m venv /var/www/blog/venv
             fi
-            /var/www/blog/venv/bin/python -m pip install --upgrade pip
-            /var/www/blog/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+            # 升级 pip（使用清华镜像）
+            /var/www/blog/venv/bin/python -m pip install --upgrade pip \
+              -i https://pypi.tuna.tsinghua.edu.cn/simple \
+              --trusted-host pypi.tuna.tsinghua.edu.cn
+
+            # 安装依赖（使用清华镜像 + 无缓存）
+            /var/www/blog/venv/bin/pip install --no-cache-dir -r requirements.txt \
+              -i https://pypi.tuna.tsinghua.edu.cn/simple \
+              --trusted-host pypi.tuna.tsinghua.edu.cn
 
             echo "🛑 正在停止已存在的 FastAPI 进程..."
             pkill -f "uvicorn main:app" || true
