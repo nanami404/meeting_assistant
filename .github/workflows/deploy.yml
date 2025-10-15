@@ -3,6 +3,7 @@ name: 部署会议助手到 Ubuntu 24.04
 on:
   push:
     branches: [ main ]  # 只在推送到 main 分支时触发
+  workflow_dispatch: {}  # 支持手动触发部署
 
 jobs:
   deploy:
@@ -19,20 +20,27 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          script_stop: true
           script: |
             cd /var/www/blog
-            echo "🔄 正在从 GitHub 拉取最新代码..."
-            git pull origin main
+            echo "🔄 正在从 GitHub 强制同步 main..."
+            git fetch --all --prune
+            git reset --hard origin/main
 
             echo "📦 正在安装/更新 Python 依赖..."
-            /var/www/blog/venv/bin/pip install -r requirements.txt
+            if [ ! -d "/var/www/blog/venv" ]; then
+              echo "✨ 未发现 venv，正在创建..."
+              python3 -m venv /var/www/blog/venv
+            fi
+            /var/www/blog/venv/bin/python -m pip install --upgrade pip
+            /var/www/blog/venv/bin/pip install --no-cache-dir -r requirements.txt
 
             echo "🛑 正在停止已存在的 FastAPI 进程..."
             pkill -f "uvicorn main:app" || true
 
             echo "🚀 正在启动 FastAPI 应用..."
-            nohup /var/www/blog/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
+            nohup /var/www/blog/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
 
             echo "✅ 部署成功，时间：$(date)"
             echo "📄 app.log 文件尾日志："
-            tail app.log
+            tail -n 200 app.log
