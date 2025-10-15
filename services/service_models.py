@@ -2,6 +2,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum
+import pytz
 
 # 第三方库 - SQLAlchemy相关
 from sqlalchemy import (
@@ -9,7 +10,8 @@ from sqlalchemy import (
     String,
     DateTime,
     ForeignKey,
-    Index
+    Index,
+    func
 )
 
 from sqlalchemy import (
@@ -22,6 +24,8 @@ from sqlalchemy.orm import relationship
 
 # 自定义库
 from db.databases import Base
+
+shanghai_tz = pytz.timezone('Asia/Shanghai')
 
 class UserRole(str, Enum):
     """用户角色枚举"""
@@ -67,8 +71,8 @@ class User(Base):
     password_hash = Column(String(255), nullable=False, comment="密码哈希值（bcrypt加密）")
 
     # 时间戳字段
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, comment="创建时间")
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="更新时间")
 
     # 关联字段
     created_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
@@ -110,8 +114,8 @@ class Meeting(Base):
     agenda = Column(Text)
     # scheduled, in_progress, completed, cancelled
     status = Column(String(50), default="scheduled")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), onupdate=datetime.utcnow)
     # 关联字段：创建者/更新者
     created_by = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
     updated_by = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="更新者用户ID")
@@ -135,7 +139,7 @@ class Participant(Base):
     user_role = Column(String(50), default="participant")
     is_required = Column(Boolean, default=True)
     attendance_status = Column(String(50), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz))
 
     user = relationship(
         "User",
@@ -152,7 +156,7 @@ class Transcription(Base):
     speaker_id = Column(String(50), nullable=False)
     speaker_name = Column(String(50))
     text = Column(Text, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime(timezone=True), default=func.utcnow(), nullable=False)
     confidence_score = Column(Integer, default=100)
     is_action_item = Column(Boolean, default=False)
     is_decision = Column(Boolean, default=False)
@@ -177,8 +181,8 @@ class Message(Base):
 
     # 状态与时间戳
     is_read = Column(Boolean, nullable=False, default=False, comment="是否已读(0未读/1已读)")
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, comment="创建时间")
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="更新时间")
 
     # 索引
     __table_args__ = (
