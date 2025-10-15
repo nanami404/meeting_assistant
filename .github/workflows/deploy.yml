@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: 通过 SSH 部署
+    name: SSH 部署
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
@@ -47,7 +47,13 @@ jobs:
 
             echo "🚀 正在启动 FastAPI 应用..."
             nohup /var/www/blog/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
+            # 等待 1 秒，确保 app.log 文件被创建
+            sleep 1
 
             echo "✅ 部署成功，时间：$(date)"
-            echo "📄 app.log 文件尾日志："
-            tail -n 200 app.log
+            if [ -f app.log ]; then
+              echo "📄 app.log 文件尾日志："
+              tail -n 200 app.log
+            else
+              echo "⚠️ app.log 尚未生成，但应用已在后台启动。"
+            fi
