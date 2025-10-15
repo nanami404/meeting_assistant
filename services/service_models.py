@@ -46,8 +46,8 @@ class User(Base):
     email = Column(String(255), nullable=True, comment="邮箱地址")
     company = Column(String(200), nullable=True, comment="所属单位名称")
 
-    # 权限和状态字段
-    role = Column(String(20), nullable=False, default=UserRole.USER.value, comment="用户角色：admin-管理员，user-普通用户")
+    # 权限和状态字段（数据库列名改为 user_role，类型扩展至 36）
+    role = Column('user_role', String(36), nullable=False, default=UserRole.USER.value, comment="用户角色：admin-管理员，user-普通用户")
     status = Column(String(20), nullable=False, default=UserStatus.ACTIVE.value, comment="用户状态：active-激活，inactive-未激活，suspended-暂停")
 
     # 安全信息字段
@@ -74,7 +74,7 @@ class User(Base):
         Index('idx_users_email', 'email'),
         Index('idx_users_phone', 'phone'),
         Index('idx_users_user_name', 'user_name'),
-        Index('idx_users_role', 'role'),
+        Index('idx_users_role', 'user_role'),
         Index('idx_users_status', 'status'),
         Index('idx_users_company', 'company'),
         Index('idx_users_created_at', 'created_at'),

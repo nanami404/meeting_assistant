@@ -29,7 +29,7 @@ CREATE TABLE `users` (
     `company` VARCHAR(200) DEFAULT NULL COMMENT '所属单位名称',
 
     -- 权限和状态字段
-    `role` VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '用户角色：admin-管理员，user-普通用户',
+    `user_role` VARCHAR(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'user' COMMENT '用户角色：admin-管理员，user-普通用户',
     `status` VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT '用户状态：active-激活，inactive-未激活，suspended-暂停',
 
     -- 安全信息字段
@@ -53,7 +53,7 @@ CREATE TABLE `users` (
     KEY `idx_users_email` (`email`),
     KEY `idx_users_phone` (`phone`),
     KEY `idx_users_user_name` (`user_name`),
-    KEY `idx_users_role` (`role`),
+    KEY `idx_users_role` (`user_role`),
     KEY `idx_users_status` (`status`),
     KEY `idx_users_company` (`company`),
     KEY `idx_users_created_at` (`created_at`),
@@ -93,7 +93,7 @@ INSERT IGNORE INTO `users` (
     `name`,
     `user_name`,
     `email`,
-    `role`,
+    `user_role`,
     `status`,
     `password_hash`,
     `created_at`,
@@ -117,7 +117,7 @@ INSERT IGNORE INTO `users` (
     `gender`,
     `phone`,
     `company`,
-    `role`,
+    `user_role`,
     `status`,
     `password_hash`,
     `created_by`,
@@ -149,7 +149,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SELECT
     'MySQL用户表初始化完成！' as `消息`,
     (SELECT COUNT(*) FROM `users`) as `用户表记录数`,
-    (SELECT COUNT(*) FROM `users` WHERE `role` = 'admin') as `管理员数量`,
+    (SELECT COUNT(*) FROM `users` WHERE `user_role` = 'admin') as `管理员数量`,
     (SELECT COUNT(*) FROM `users` WHERE `status` = 'active') as `活跃用户数`;
 
 -- 显示用户列表
@@ -157,7 +157,7 @@ SELECT
     `id`,
     `name`,
     `email`,
-    `role`,
+    `user_role`,
     `status`,
     `created_at`
 FROM `users`

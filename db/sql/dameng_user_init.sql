@@ -37,7 +37,7 @@ CREATE TABLE users (
     company       VARCHAR2(200)      DEFAULT NULL,
 
     -- 权限和状态字段
-    role          VARCHAR2(20)       DEFAULT 'user'      NOT NULL,
+    user_role     VARCHAR2(36)       DEFAULT 'user'      NOT NULL,
     status        VARCHAR2(20)       DEFAULT 'active'    NOT NULL,
 
     -- 安全信息字段
@@ -67,7 +67,7 @@ COMMENT ON COLUMN users.gender IS '性别：male-男性，female-女性，other-
 COMMENT ON COLUMN users.phone IS '手机号码';
 COMMENT ON COLUMN users.email IS '邮箱地址';
 COMMENT ON COLUMN users.company IS '所属单位名称';
-COMMENT ON COLUMN users.role IS '用户角色：admin-管理员，user-普通用户';
+COMMENT ON COLUMN users.user_role IS '用户角色：admin-管理员，user-普通用户';
 COMMENT ON COLUMN users.status IS '用户状态：active-激活，inactive-未激活，suspended-暂停';
 COMMENT ON COLUMN users.password_hash IS '密码哈希值（bcrypt加密）';
 COMMENT ON COLUMN users.created_at IS '创建时间';
@@ -79,7 +79,7 @@ COMMENT ON COLUMN users.updated_by IS '更新者用户ID';
 CREATE INDEX idx_users_email       ON users(email);
 CREATE INDEX idx_users_phone       ON users(phone);
 CREATE INDEX idx_users_user_name   ON users(user_name);
-CREATE INDEX idx_users_role        ON users(role);
+CREATE INDEX idx_users_role        ON users(user_role);
 CREATE INDEX idx_users_status      ON users(status);
 CREATE INDEX idx_users_company     ON users(company);
 CREATE INDEX idx_users_created_at  ON users(created_at);
@@ -144,7 +144,7 @@ INSERT INTO users (
     name,
     user_name,
     email,
-    role,
+    user_role,
     status,
     password_hash,
     created_at,
@@ -172,7 +172,7 @@ INSERT INTO users (
     gender,
     phone,
     company,
-    role,
+    user_role,
     status,
     password_hash,
     created_by,
@@ -206,7 +206,7 @@ COMMIT;
 SELECT
     '达梦数据库用户表初始化完成！' AS "消息",
     (SELECT COUNT(*) FROM users) AS "用户表记录数",
-    (SELECT COUNT(*) FROM users WHERE role = 'admin') AS "管理员数量",
+    (SELECT COUNT(*) FROM users WHERE user_role = 'admin') AS "管理员数量",
     (SELECT COUNT(*) FROM users WHERE status = 'active') AS "活跃用户数"
 FROM dual;
 
@@ -215,7 +215,7 @@ SELECT
     id,
     name,
     email,
-    role,
+    user_role,
     status,
     created_at
 FROM users
