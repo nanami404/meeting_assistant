@@ -23,9 +23,8 @@ jobs:
           script_stop: true
           script: |
             cd /var/www/blog
-            echo "🔄 正在从 GitHub 强制同步 main..."
-            git fetch --all --prune
-            git reset --hard origin/main
+            echo "🔄 正在从 GitHub 拉取最新代码..."
+            git pull origin main
 
             echo "📦 正在安装/更新 Python 依赖..."
             if [ ! -d "/var/www/blog/venv" ]; then
