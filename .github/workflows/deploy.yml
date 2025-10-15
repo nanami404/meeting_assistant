@@ -44,7 +44,7 @@ jobs:
               --trusted-host pypi.tuna.tsinghua.edu.cn
 
             #echo "🛑 正在停止已存在的 FastAPI 进程..."
-            #pkill -f "uvicorn main:app" || true
+            pkill uvicorn || true   
 
             echo "🚀 正在启动 FastAPI 应用..."
             nohup /var/www/blog/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
