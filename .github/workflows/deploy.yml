@@ -47,9 +47,7 @@ jobs:
             pkill -f "uvicorn main:app" || true
 
             echo "🚀 正在启动 FastAPI 应用..."
-            /var/www/blog/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
-            APP_PID=$!
-            disown $APP_PID
+            nohup /var/www/blog/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
             echo "✅ FastAPI 已在后台运行，PID: $APP_PID"
 
             # 等待日志文件生成
