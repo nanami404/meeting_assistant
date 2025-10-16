@@ -10,9 +10,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
 
 # 自定义类
-from db.databases import engine, Base
+from db.databases import DatabaseConfig, DatabaseSessionManager
 from db.conn_manager import  ConnectionManager
 from services.meeting_service import MeetingService
 from services.document_service import DocumentService
@@ -22,6 +24,13 @@ from services.redis_service import init_redis_service, cleanup_redis_service
 import router
 from router import user_manage as user_router
 
+# 对外暴露的依赖注入函数
+db_config = DatabaseConfig()
+db_manager = DatabaseSessionManager(db_config)
+get_db = db_manager.get_sync_session  # 同步会话依赖
+get_async_db = db_manager.get_async_session  #
+
+
 # Services
 meeting_service = MeetingService()
 document_service = DocumentService()
@@ -29,6 +38,13 @@ speech_service = SpeechService()
 email_service = EmailService()
 
 load_dotenv()
+
+Base = declarative_base()
+engine = create_engine(
+   db_config.sync_url,
+    # Set to False in production
+    echo=True
+)
 # Create database tables
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Meeting Assistant API", version="1.0.0")
@@ -118,9 +134,13 @@ logger.configure(handlers=handlers)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 manager = ConnectionManager()
+app.include_router(router.user_manage)
 app.include_router(router.meeting_manage)
+app.include_router(router.attendance_manage)
 app.include_router(router.message_manage)
-app.include_router(user_router)
+
+
+
 
 # 添加健康检查路由
 from router.health_check import router as health_router

@@ -1,111 +1,118 @@
-#-*- coding: utf-8 -*-
-# 标准库
+# -*- coding: utf-8 -*-
 import os
 from urllib.parse import quote_plus
-from typing import AsyncGenerator
-from typing import Generator
+from typing import AsyncGenerator, Generator, AsyncContextManager
+from contextlib import asynccontextmanager
 
-# 第三方库
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm import Session  # 确保导入Session
-from contextlib import asynccontextmanager
+from sqlalchemy.orm import sessionmaker, Session
 
 from dotenv import load_dotenv
+
+# 加载环境变量
 load_dotenv()
 
-# Database configuration from environment
-MYSQL_HOST = os.getenv("MYSQL_HOST", "127.0.0.1")
-MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
-MYSQL_USER = os.getenv("MYSQL_USER", "nokia_cs")
-DB_PASSWORD_RAW = os.getenv("MYSQL_PASSWORD", "Siryuan#525@614")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "rjgf_meeting")
-
-# 关键：对密码中的特殊字符进行URL编码（#→%23，@→%40）
-MYSQL_PASSWORD = quote_plus(DB_PASSWORD_RAW)
-# 构建MySQL连接URL
-
-DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-
-DATABASE_URL2 = f"mysql+asyncmy://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
+# 基础模型类（所有数据库模型继承此类）
 Base = declarative_base()
 
-engine = create_engine(
-    DATABASE_URL,
-    # Set to False in production
-    echo=True
-)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+class DatabaseConfig:
+    """数据库配置类，负责解析环境变量并生成连接URL"""
 
-Base = declarative_base()
+    def __init__(self):
+        # 从环境变量读取配置，提供默认值
+        self.mysql_host = os.getenv("MYSQL_HOST", "118.89.93.181")
+        self.mysql_port = os.getenv("MYSQL_PORT", "3306")
+        self.mysql_user = os.getenv("MYSQL_USER", "nokia_cs")
+        self.db_password_raw = os.getenv("MYSQL_PASSWORD", "Siryuan#525@614")
+        self.mysql_database = os.getenv("MYSQL_DATABASE", "rjgf_meeting")
 
-# Dependency to get database session
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+        # 对密码中的特殊字符进行URL编码（如#、@等）
+        self.mysql_password = quote_plus(self.db_password_raw)
 
-# 2. 创建异步引擎（管理数据库连接池，生产环境需调整池参数）
-async_engine = create_async_engine(
-    DATABASE_URL2,
-    # 生产环境关闭 SQL 日志打印，开发环境可设为 True
-    echo=True,
-    pool_size=30,  # 连接池大小
-    max_overflow=20,  # 超出池大小的临时连接数
-    pool_recycle=3600,  # 连接超时回收（秒）
-    pool_pre_ping=True  # 连接前检查有效性，避免无效连接
-)
-
-# 3. 创建异步会话工厂（每次调用生成新会话，非线程安全，需依赖注入隔离）
-AsyncSessionLocal = sessionmaker(
-    bind=async_engine,
-    class_=AsyncSession,  # 强制使用异步会话类
-    autoflush=False,     # 关闭自动刷新（避免未提交的修改影响查询）
-    # 关闭自动提交（需手动 await db.commit()）
-    autocommit=False,
-    expire_on_commit=True  # 提交后不失效对象，便于后续访问属性
-)
+        # 生成同步/异步连接URL
+        self.sync_url = f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
+        self.async_url = f"mysql+asyncmy://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
 
 
+class DatabaseSessionManager:
+    """数据库会话管理器，封装同步/异步引擎与会话创建逻辑"""
+
+    def __init__(self, config: DatabaseConfig):
+        self.config = config
+
+        # 初始化同步引擎与会话工厂
+        self.sync_engine = create_engine(
+            self.config.sync_url,
+            echo=True,  # 开发环境打印SQL日志，生产环境设为False
+            pool_pre_ping=True  # 连接有效性检查
+        )
+        self.sync_session_factory = sessionmaker(
+            bind=self.sync_engine,
+            autocommit=False,
+            autoflush=False
+        )
+
+        # 初始化异步引擎与会话工厂
+        self.async_engine = create_async_engine(
+            self.config.async_url,
+            echo=True,  # 开发环境打印SQL日志
+            pool_size=30,
+            max_overflow=20,
+            pool_recycle=3600,
+            pool_pre_ping=True
+        )
+        self.async_session_factory = sessionmaker(
+            bind=self.async_engine,
+            class_=AsyncSession,
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=True
+        )
+
+    # ------------------------------ 同步会话管理 ------------------------------
+    def get_sync_session(self) -> Generator[Session, None, None]:
+        """同步会话依赖注入生成器（用于非异步路由）"""
+        session = self.sync_session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    # ------------------------------ 异步会话管理 ------------------------------
+    @asynccontextmanager
+    async def safe_async_session(self) -> AsyncContextManager[AsyncSession]:
+        """安全的异步会话上下文管理器，自动处理提交/回滚/关闭"""
+        session = self.async_session_factory()
+        try:
+            yield session
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            # 确保会话正确关闭，处理可能的事务残留
+            if not session.in_transaction():
+                await session.close()
+            else:
+                try:
+                    await session.rollback()
+                    await session.close()
+                except Exception:
+                    pass
+
+    async def get_async_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """异步会话依赖注入生成器（用于异步路由）"""
+        async with self.safe_async_session() as session:
+            yield session
 
 
+# 单例实例化（项目中全局使用一个管理器）
+db_config = DatabaseConfig()
+db_manager = DatabaseSessionManager(db_config)
 
-
-@asynccontextmanager
-async def safe_async_db()-> AsyncGenerator[AsyncSession, None]:
-    """
-    安全的异步数据库会话管理器
-    """
-    async_session = AsyncSessionLocal()
-    try:
-        yield async_session
-        await async_session.commit()
-    except Exception as e:
-        await async_session.rollback()
-        raise e
-    finally:
-        # 检查会话状态后再关闭
-        if not async_session.in_transaction():
-            await async_session.close()
-        else:
-            # 如果仍在事务中，先回滚再关闭
-            try:
-                await async_session.rollback()
-                await async_session.close()
-            except Exception:
-                # 如果关闭失败，忽略错误以避免循环异常
-                pass
-
-# 修改依赖项
-async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    async with safe_async_db() as db:
-        yield db
+# 对外暴露的依赖注入函数（与FastAPI路由配合使用）
+get_db = db_manager.get_sync_session  # 同步会话依赖
+get_async_db = db_manager.get_async_session  # 异步会话依赖

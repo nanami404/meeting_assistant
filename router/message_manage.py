@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from loguru import logger
 
 # 自定义模块
-from db.databases import get_db
+from db.databases import DatabaseConfig, DatabaseSessionManager
 from services.auth_dependencies import require_auth
 from services.message_service import MessageService
 from services.service_models import User
@@ -14,6 +14,11 @@ router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
 message_service = MessageService()
 
+# 对外暴露的依赖注入函数
+db_config = DatabaseConfig()
+db_manager = DatabaseSessionManager(db_config)
+get_db = db_manager.get_sync_session  # 同步会话依赖
+get_async_db = db_manager.get_async_session  # 异步会话依赖
 
 def _resp(data=None, message="success", code=0):
     return {"code": code, "message": message, "data": data}

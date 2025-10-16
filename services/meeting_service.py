@@ -1,16 +1,17 @@
 # 标准库
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 # 第三方库
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException
 
 # 自定义类
-from .service_models import Meeting, Participant, Transcription
-from schemas import MeetingCreate,TranscriptionCreate
+from .service_models import Meeting, Participant, Transcription, PersonSign, User
+from schemas import MeetingCreate,TranscriptionCreate, PersonSignCreate
 
 
 class MeetingService(object):
@@ -91,6 +92,7 @@ class MeetingService(object):
         db.delete(meeting)
         db.commit()
         return True
+
 
     async def save_transcription(self, db: AsyncSession, transcription_data: TranscriptionCreate) -> Transcription:
         # 新增：查询会议是否存在（异步操作，必须加 await）

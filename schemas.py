@@ -25,6 +25,20 @@ class ParticipantResponse(ParticipantBase):
         from_attributes = True
 
 
+# 定义人员签到数据模型
+class PersonSignCreate(BaseModel):
+    name: str
+    user_code: Optional[str] = None
+    meeting_id: str
+    is_signed: bool
+    is_on_leave: bool
+
+class PersonSignResponse(BaseModel):
+    id: int
+    name: str
+    is_signed: bool
+    is_on_leave: bool
+
 class MeetingBase(BaseModel):
     title: str
     description: Optional[str] = None

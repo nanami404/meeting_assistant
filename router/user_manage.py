@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from loguru import logger
 
 # 自定义模块
-from db.databases import get_db
+from db.databases import DatabaseConfig, DatabaseSessionManager
 from services.user_service import UserService
 from services.auth_service import AuthService
 from services.auth_dependencies import require_auth, require_admin
@@ -19,6 +19,16 @@ router = APIRouter(prefix="/api", tags=["Users & Auth"])
 # Services
 user_service = UserService()
 auth_service = AuthService()
+
+# 对外暴露的依赖注入函数
+db_config = DatabaseConfig()
+db_manager = DatabaseSessionManager(db_config)
+get_db = db_manager.get_sync_session  # 同步会话依赖
+get_async_db = db_manager.get_async_session  # 异步会话依赖
+
+# 对外暴露的依赖注入函数（与FastAPI路由配合使用）
+get_db = db_manager.get_sync_session  # 同步会话依赖
+get_async_db = db_manager.get_async_session  # 异步会话依赖
 
 # ----------------------------- 辅助方法 -----------------------------
 

@@ -21,15 +21,18 @@ from pydub import AudioSegment
 from fastapi import APIRouter,HTTPException, Depends
 
 #自定义库
+from db.databases import DatabaseConfig, DatabaseSessionManager
+from db.conn_manager import ConnectionManager
 from services.meeting_service import MeetingService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
-from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate
-from db.conn_manager import ConnectionManager
-from db.databases import get_async_db
+from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
 
-router = APIRouter()
+
+
+
+router = APIRouter(prefix="/api/meetings", tags=["Mettings"])
 # 获取东八区当前时间
 tz = pytz.timezone("Asia/Shanghai")
 
@@ -44,40 +47,20 @@ manager = ConnectionManager()
 MEETING_NOT_FOUND_DETAIL = "Meeting not found"
 
 
-# Database configuration from environment
-MYSQL_HOST = os.getenv("MYSQL_HOST", "118.89.93.181")
-MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
-MYSQL_USER = os.getenv("MYSQL_USER", "nokia_cs")
-DB_PASSWORD_RAW = os.getenv("MYSQL_PASSWORD", "Siryuan#525@614")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "rjgf_meeting")
-
-# 关键：对密码中的特殊字符进行URL编码（#→%23，@→%40）
-MYSQL_PASSWORD = quote_plus(DB_PASSWORD_RAW)
-# 构建MySQL连接URL
-
-DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-
-DATABASE_URL2 = f"mysql+asyncmy://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-def get_db()-> Generator[Session, None, None]:
-    """Dependency to get database session"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# 对外暴露的依赖注入函数
+db_config = DatabaseConfig()
+db_manager = DatabaseSessionManager(db_config)
+get_db = db_manager.get_sync_session  # 同步会话依赖
+get_async_db = db_manager.get_async_session  #
 
 
-
-@router.get("/")
+@router.get("/open")
 async def root()->dict[str, str]:
     return {"message": "Meeting Assistant API is running"}
 
+
 # Meeting management endpoints
-@router.post("/api/meetings", response_model=MeetingResponse)
+@router.post("/", response_model=MeetingResponse)
 async def create_meeting(meeting: MeetingCreate, db: Session = Depends(get_db)) ->MeetingResponse:
     """创建新会议
     Args:
@@ -124,13 +107,13 @@ async def create_meeting(meeting: MeetingCreate, db: Session = Depends(get_db)) 
             detail="服务器内部错误，创建会议失败"
         )
 
-@router.get("/api/meetings", response_model=List[MeetingResponse])
+@router.get("/", response_model=List[MeetingResponse])
 async def get_meetings(db: Session = Depends(get_db))-> list[MeetingResponse]:
     """Get all meetings"""
     return await meeting_service.get_meetings(db)
 
 
-@router.get("/api/meetings/{meeting_id}", response_model=MeetingResponse)
+@router.get("/{meeting_id}", response_model=MeetingResponse)
 async def get_meeting(meeting_id: str, db: Session = Depends(get_db))-> MeetingResponse:
     """Get a specific meeting"""
     meeting = await meeting_service.get_meeting(db, meeting_id)
@@ -139,7 +122,7 @@ async def get_meeting(meeting_id: str, db: Session = Depends(get_db))-> MeetingR
     return meeting
 
 
-@router.put("/api/meetings/{meeting_id}", response_model=MeetingResponse)
+@router.put("/{meeting_id}", response_model=MeetingResponse)
 async def update_meeting(meeting_id: str, meeting: MeetingCreate, db: Session = Depends(get_db))-> MeetingResponse:
     """Update a meeting"""
     updated_meeting = await meeting_service.update_meeting(db, meeting_id, meeting)
@@ -148,7 +131,7 @@ async def update_meeting(meeting_id: str, meeting: MeetingCreate, db: Session = 
     return updated_meeting
 
 
-@router.delete("/api/meetings/{meeting_id}")
+@router.delete("/{meeting_id}")
 async def delete_meeting(meeting_id: str, db: Session = Depends(get_db))-> dict[str, str]:
     """Delete a meeting"""
     success = await meeting_service.delete_meeting(db, meeting_id)
@@ -158,7 +141,7 @@ async def delete_meeting(meeting_id: str, db: Session = Depends(get_db))-> dict[
 
 
 # Document generation endpoints
-@router.post("/api/meetings/{meeting_id}/generate-notification")
+@router.post("/{meeting_id}/generate-notification")
 async def generate_notification(meeting_id: str, db: Session = Depends(get_db)):
     """Generate meeting notification document
         生成会议通知文档
@@ -174,7 +157,7 @@ async def generate_notification(meeting_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/api/meetings/{meeting_id}/generate-minutes")
+@router.post("/{meeting_id}/generate-minutes")
 async def generate_minutes(meeting_id: str, db: Session = Depends(get_db)):
     """Generate meeting minutes document
        生成会议纪要文档
@@ -191,7 +174,7 @@ async def generate_minutes(meeting_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/api/meetings/{meeting_id}/send-notification")
+@router.post("/{meeting_id}/send-notification")
 async def send_notification(meeting_id: str, db: Session = Depends(get_db))-> dict[str, str]:
     """
     Send meeting notification emails
@@ -354,7 +337,7 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str):
         await websocket.close(code=1011, reason=f"Server error: {str(e)}")
 
 # Upload audio file for transcription
-@router.post("/api/meetings/{meeting_id}/upload-audio")
+@router.post("/{meeting_id}/upload-audio")
 async def upload_audio(
         meeting_id: str,
         audio_file: UploadFile = File(...),
@@ -423,7 +406,7 @@ async def upload_audio(
 
 
 # Get meeting transcriptions
-@router.get("/api/meetings/{meeting_id}/transcriptions")
+@router.get("/{meeting_id}/transcriptions")
 async def get_meeting_transcriptions(meeting_id: str, db: Session = Depends(get_db)):
     """Get all transcriptions for a meeting"""
     transcriptions = await meeting_service.get_meeting_transcriptions(db, meeting_id)
