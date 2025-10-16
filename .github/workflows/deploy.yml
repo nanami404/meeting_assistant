@@ -22,24 +22,24 @@ jobs:
           port: 22
           script_stop: true
           script: |
-            cd /var/www/blog || exit 1
+            cd /var/www/app || exit 1
 
             echo "🔄 正在从 GitHub 拉取最新代码..."
             git pull origin main
 
             echo "📦 正在安装/更新 Python 依赖..."
-            if [ ! -d "/var/www/blog/venv" ]; then
+            if [ ! -d "/var/www/app/venv" ]; then
               echo "✨ 未发现 venv，正在创建..."
-              python3 -m venv /var/www/blog/venv
+              python3 -m venv /var/www/app/venv
             fi
 
             # 升级 pip（使用清华镜像）
-            /var/www/blog/venv/bin/python -m pip install --upgrade pip \
+            /var/www/app/venv/bin/python -m pip install --upgrade pip \
               -i https://pypi.tuna.tsinghua.edu.cn/simple \
               --trusted-host pypi.tuna.tsinghua.edu.cn
 
             # 安装依赖（使用清华镜像 + 无缓存）
-            /var/www/blog/venv/bin/pip install --no-cache-dir -r requirements.txt \
+            /var/www/app/venv/bin/pip install --no-cache-dir -r requirements.txt \
               -i https://pypi.tuna.tsinghua.edu.cn/simple \
               --trusted-host pypi.tuna.tsinghua.edu.cn
 
