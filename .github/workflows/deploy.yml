@@ -14,7 +14,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 部署到远程服务器
-        uses: meeting_assistantleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -47,16 +47,16 @@ jobs:
             pkill uvicorn || true   
 
             echo "🚀 正在启动 FastAPI 应用..."
-            nohup /var/www/blog/venv/bin/python -m uvicorn main:meeting_assistant --host 0.0.0.0 --port 8000 --workers 2 > meeting_assistant.log 2>&1 &
+            nohup /var/www/meeting_assistant/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
             echo "✅ FastAPI 已在后台运行，PID: $APP_PID"
 
             # 等待日志文件生成
             sleep 2
 
             echo "✅ 部署成功，时间：$(date)"
-            if [ -f meeting_assistant.log ]; then
+            if [ -f app.log ]; then
               echo "📄 最近 50 行应用日志："
-              tail -n 50 meeting_assistant.log
+              tail -n 50 app.log
             else
-              echo "⚠️ meeting_assistant.log 尚未生成，但应用已在后台启动。"
+              echo "⚠️ app.log 尚未生成，但应用已在后台启动。"
             fi
