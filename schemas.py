@@ -257,7 +257,7 @@ class MessageCreate(BaseModel):
     """发送消息请求模型"""
     title: str
     content: str
-    receiver_id: int
+    recipient_ids: List[int] = Field(..., min_items=1, description="接收者ID列表，至少包含一个接收者")
 
 class MessageResponse(BaseModel):
     """消息响应模型"""
@@ -265,10 +265,8 @@ class MessageResponse(BaseModel):
     title: str
     content: str
     sender_id: int
-    receiver_id: int
-    is_read: bool
+    recipient_ids: List[int] = Field(default_factory=list, description="接收者ID列表")
     created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True

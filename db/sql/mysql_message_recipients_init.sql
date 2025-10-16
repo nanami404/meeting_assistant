@@ -21,33 +21,28 @@ CREATE TABLE `message_recipients` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
 
     -- 关联字段
-    `message_id` BIGINT NOT NULL COMMENT '消息ID，关联messages表的id字段',
-    `recipient_id` BIGINT NOT NULL COMMENT '接收者用户ID，关联用户表的id字段',
+    `message_id` BIGINT NOT NULL COMMENT '消息ID（外键指向 messages.id）',
+    `recipient_id` BIGINT NOT NULL COMMENT '接收者ID',
 
     -- 状态字段
-    `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读状态(0=未读/1=已读)',
-    `read_at` TIMESTAMP NULL DEFAULT NULL COMMENT '消息阅读时间，未读时为NULL',
+    `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读(0未读/1已读)',
+    `read_at` TIMESTAMP NULL COMMENT '阅读时间（可选）',
 
     -- 时间戳字段
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间（关联时间）',
 
     -- 主键约束
     PRIMARY KEY (`id`),
 
-    -- 唯一约束：防止同一消息对同一接收者的重复记录
+    -- 唯一约束：防止重复发送
     UNIQUE KEY `uk_message_recipient` (`message_id`, `recipient_id`),
 
-    -- 性能优化索引
-    KEY `idx_message_recipients_message_id` (`message_id`) COMMENT '消息ID索引，用于查询某消息的所有接收者',
-    KEY `idx_message_recipients_recipient_id` (`recipient_id`) COMMENT '接收者ID索引，用于查询某用户的所有消息',
-    KEY `idx_message_recipients_is_read` (`is_read`) COMMENT '已读状态索引，用于查询未读消息',
-    KEY `idx_message_recipients_created_at` (`created_at`) COMMENT '创建时间索引，用于时间范围查询',
-    
-    -- 复合索引：优化常用查询场景
-    KEY `idx_message_recipients_recipient_read` (`recipient_id`, `is_read`) COMMENT '接收者+已读状态复合索引，用于查询用户未读消息',
-    KEY `idx_message_recipients_message_read` (`message_id`, `is_read`) COMMENT '消息+已读状态复合索引，用于统计消息阅读情况'
+    -- 索引
+    KEY `idx_message_recipients_recipient_id` (`recipient_id`),
+    KEY `idx_message_recipients_is_read` (`is_read`),
+    KEY `idx_message_recipients_message_id` (`message_id`)
 
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息接收者表 - 支持多接收者消息功能';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息接收者关联表';
 
 -- =================================================================
 -- 2. 数据完整性说明

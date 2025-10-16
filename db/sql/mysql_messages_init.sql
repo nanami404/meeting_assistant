@@ -26,9 +26,6 @@ CREATE TABLE `messages` (
     -- 关联字段
     `sender_id` BIGINT NOT NULL COMMENT '发送者ID',
 
-    -- 状态字段
-    `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读(0未读/1已读)',
-
     -- 时间戳字段
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -38,10 +35,9 @@ CREATE TABLE `messages` (
 
     -- 索引
     KEY `idx_messages_sender_id` (`sender_id`),
-    KEY `idx_messages_is_read` (`is_read`),
     KEY `idx_messages_created_at` (`created_at`)
 
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息内容表';
 
 -- 重新启用外键检查
 SET FOREIGN_KEY_CHECKS = 1;

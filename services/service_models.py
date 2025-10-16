@@ -161,7 +161,7 @@ class Transcription(Base):
 
 
 class Message(Base):
-    """消息模型 - 用户消息通知"""
+    """消息内容表 - 存储消息基本信息"""
     __tablename__ = "messages"
 
     # 主键（BIGINT 自增）
@@ -173,17 +173,65 @@ class Message(Base):
 
     # 关联用户
     sender_id = Column(BigInteger, nullable=False, comment="发送者ID")
-    receiver_id = Column(BigInteger, nullable=False, comment="接收者ID")
 
-    # 状态与时间戳
-    is_read = Column(Boolean, nullable=False, default=False, comment="是否已读(0未读/1已读)")
+    # 时间戳
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间")
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="更新时间")
+
+    # 关联关系 - 与MessageRecipient的一对多关系
+    recipients = relationship("MessageRecipient", back_populates="message", cascade="all, delete-orphan")
 
     # 索引
     __table_args__ = (
         Index('idx_messages_sender_id', 'sender_id'),
-        Index('idx_messages_receiver_id', 'receiver_id'),
-        Index('idx_messages_is_read', 'is_read'),
         Index('idx_messages_created_at', 'created_at'),
     )
+
+    def __repr__(self) -> str:
+        """字符串表示方法，便于调试"""
+        return f"<Message(id={self.id}, title='{self.title}', sender_id={self.sender_id})>"
+
+
+class MessageRecipient(Base):
+    """消息接收者关联表 - 支持多接收者消息功能"""
+    __tablename__ = "message_recipients"
+
+    # 主键字段
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键ID（自增）")
+
+    # 关联字段
+    message_id = Column(BigInteger, ForeignKey("messages.id"), nullable=False, comment="消息ID（外键指向 messages.id）")
+    recipient_id = Column(BigInteger, nullable=False, comment="接收者ID")
+
+    # 状态字段
+    is_read = Column(Boolean, nullable=False, default=False, comment="是否已读(0未读/1已读)")
+    read_at = Column(DateTime(timezone=True), nullable=True, comment="阅读时间（可选）")
+
+    # 时间戳字段
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间（关联时间）")
+
+    # 关联关系 - 与Message的多对一关系
+    message = relationship("Message", back_populates="recipients")
+
+    # 索引设计 - 优化查询性能
+    __table_args__ = (
+        # 唯一约束：防止重复发送
+        Index('uk_message_recipient', 'message_id', 'recipient_id', unique=True),
+        # 索引
+        Index('idx_message_recipients_recipient_id', 'recipient_id'),
+        Index('idx_message_recipients_is_read', 'is_read'),
+        Index('idx_message_recipients_message_id', 'message_id'),
+    )
+
+    def __repr__(self) -> str:
+        """字符串表示方法，便于调试"""
+        return f"<MessageRecipient(id={self.id}, message_id={self.message_id}, recipient_id={self.recipient_id}, is_read={self.is_read})>"
+
+    def mark_as_read(self) -> None:
+        """标记消息为已读"""
+        self.is_read = True
+        self.read_at = datetime.now(shanghai_tz)
+
+    def mark_as_unread(self) -> None:
+        """标记消息为未读"""
+        self.is_read = False
+        self.read_at = None

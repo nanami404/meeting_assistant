@@ -33,19 +33,20 @@ async def send_message(
         msg = await message_service.send_message(
             db=db,
             sender_id=current_user.id,
-            receiver_id=payload.receiver_id,
+            recipient_ids=payload.recipient_ids,
             title=payload.title,
             content=payload.content,
         )
+        # 获取接收者ID列表
+        recipient_ids = [recipient.recipient_id for recipient in msg.recipients]
+        
         data = MessageResponse(
             id=msg.id,
             title=msg.title,
             content=msg.content,
             sender_id=msg.sender_id,
-            receiver_id=msg.receiver_id,
-            is_read=msg.is_read,
+            recipient_ids=recipient_ids,
             created_at=msg.created_at,
-            updated_at=msg.updated_at,
         ).dict()
         return _resp(data)
     except HTTPException:
@@ -65,18 +66,19 @@ async def list_messages(
 ):
     try:
         items, total = await message_service.list_messages(db, current_user.id, page, page_size, is_read)
-        messages = [
-            MessageResponse(
+        messages = []
+        for m in items:
+            # 获取每条消息的接收者ID列表
+            recipient_ids = [recipient.recipient_id for recipient in m.recipients] if hasattr(m, 'recipients') and m.recipients else []
+            
+            messages.append(MessageResponse(
                 id=m.id,
                 title=m.title,
                 content=m.content,
                 sender_id=m.sender_id,
-                receiver_id=m.receiver_id,
-                is_read=m.is_read,
+                recipient_ids=recipient_ids,
                 created_at=m.created_at,
-                updated_at=m.updated_at,
-            ).dict() for m in items
-        ]
+            ).dict())
         total_pages = (total + page_size - 1) // page_size
         result = {
             "messages": messages,

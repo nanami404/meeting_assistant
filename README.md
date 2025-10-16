@@ -172,8 +172,8 @@ EMAIL_PASSWORD=your_password
 #### 消息通知 API
 
 - `POST /api/messages/send` - 发送消息
-  - 请求体：`{ "title": "标题", "content": "内容", "receiver_id": 2 }`
-  - 响应体：`{ code, message, data: { id, title, content, sender_id, receiver_id, is_read, created_at, updated_at } }`
+  - 请求体：`{ "title": "标题", "content": "内容", "recipient_ids": [2, 3, 4] }`
+- 响应体：`{ code, message, data: { id, title, content, sender_id, recipient_ids, created_at } }`
 
 - `GET /api/messages/list` - 获取当前用户消息列表（支持分页与已读状态过滤）
   - 查询参数：`page`（默认1）、`page_size`（默认20，最大100）、`is_read`（可选，`true`/`false`）

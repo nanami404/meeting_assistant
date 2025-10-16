@@ -328,8 +328,8 @@ class RedisService:
         except Exception as e:
             logger.error(f"Redis TTL操作失败 - key: {key}, error: {e}")
             return -2
-    
-    async def incr(self, key: str, amount: int = 1) -> Optional[int]:
+
+    async def increment(self, key: str, amount: int = 1) -> int:
         """递增键的值
         
         Args:
@@ -337,21 +337,51 @@ class RedisService:
             amount (int): 递增量，默认为1
             
         Returns:
-            Optional[int]: 递增后的值，失败返回None
+            int: 递增后的值
         """
         if self._degraded_mode:
-            logger.debug(f"降级模式: 跳过Redis INCR操作 - key: {key}")
-            return None
+            logger.debug(f"降级模式: 跳过Redis INCREMENT操作 - key: {key}")
+            return 0
         
         try:
             async with self.get_connection() as conn:
-                new_value = await conn.incr(key, amount)
-                logger.debug(f"Redis INCR成功 - key: {key}, amount: {amount}, new_value: {new_value}")
-                return new_value
+                if amount == 1:
+                    result = await conn.incr(key)
+                else:
+                    result = await conn.incrby(key, amount)
+                logger.debug(f"Redis INCREMENT成功 - key: {key}, amount: {amount}, result: {result}")
+                return result
                 
         except Exception as e:
-            logger.error(f"Redis INCR操作失败 - key: {key}, error: {e}")
-            return None
+            logger.error(f"Redis INCREMENT操作失败 - key: {key}, error: {e}")
+            return 0
+
+    async def decrement(self, key: str, amount: int = 1) -> int:
+        """递减键的值
+        
+        Args:
+            key (str): Redis键名
+            amount (int): 递减量，默认为1
+            
+        Returns:
+            int: 递减后的值
+        """
+        if self._degraded_mode:
+            logger.debug(f"降级模式: 跳过Redis DECREMENT操作 - key: {key}")
+            return 0
+        
+        try:
+            async with self.get_connection() as conn:
+                if amount == 1:
+                    result = await conn.decr(key)
+                else:
+                    result = await conn.decrby(key, amount)
+                logger.debug(f"Redis DECREMENT成功 - key: {key}, amount: {amount}, result: {result}")
+                return result
+                
+        except Exception as e:
+            logger.error(f"Redis DECREMENT操作失败 - key: {key}, error: {e}")
+            return 0
     
     @property
     def is_available(self) -> bool:
