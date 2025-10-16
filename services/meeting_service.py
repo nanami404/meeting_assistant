@@ -16,7 +16,7 @@ from schemas import MeetingCreate,TranscriptionCreate, PersonSignCreate
 
 
 class MeetingService(object):
-    async def create_meeting(self, db: Session, meeting_data: MeetingCreate) -> Meeting:
+    async def create_meeting(self, db: Session, meeting_data: MeetingCreate, user_id: str) -> Meeting:
         """Create a new meeting with participants"""
         # Create meeting
         meeting = Meeting(
@@ -38,8 +38,9 @@ class MeetingService(object):
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
                 name=participant_data.name,
+                user_code=user_id,
                 email=participant_data.email,
-                role=participant_data.role,
+                user_role=participant_data.user_role,
                 is_required=participant_data.is_required
             )
             db.add(participant)
