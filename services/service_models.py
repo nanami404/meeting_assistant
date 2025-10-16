@@ -83,13 +83,6 @@ class User(Base):
     updated_meetings = relationship("Meeting", foreign_keys="Meeting.updated_by", back_populates="updater")
     participations = relationship("Participant", foreign_keys="Participant.user_code", back_populates="user")
 
-    # 用户与会议的关联关系（多对多，通过中间表）
-    meeting_associations = relationship(
-        "UserMeetingAssociation",
-        foreign_keys="UserMeetingAssociation.user_id",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
 
     # 自引用关系
     creator_user = relationship("User", foreign_keys=[created_by], remote_side=[id])
@@ -102,6 +95,15 @@ class User(Base):
         Index('idx_users_status', 'status')
     )
 
+# 定义人员签到表模型
+class PersonSign(Base):
+    __tablename__ = "person_sign"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50),index=True)
+    user_code = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
+    is_signed = Column(Boolean, default=False)
+    is_on_leave = Column(Boolean, default=False)
 
 class Meeting(Base):
     __tablename__ = "meetings"
