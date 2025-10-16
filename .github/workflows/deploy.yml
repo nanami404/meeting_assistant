@@ -43,11 +43,24 @@ jobs:
               -i https://pypi.tuna.tsinghua.edu.cn/simple \
               --trusted-host pypi.tuna.tsinghua.edu.cn
 
-            #echo "🛑 正在停止已存在的 FastAPI 进程..."
-            pkill uvicorn || true   
+            echo "🛑 停止 FastAPI 服务（端口 8000）..."
+            PIDS=$(lsof -t -iTCP:8000 -sTCP:LISTEN 2>/dev/null || echo "")
+            if [ -n "$PIDS" ]; then
+              echo "优雅停止: $PIDS"
+              kill -TERM $PIDS || true
+              sleep 2
+              LEFT=$(lsof -t -iTCP:8000 -sTCP:LISTEN 2>/dev/null || echo "")
+              if [ -n "$LEFT" ]; then
+                echo "强制停止: $LEFT"
+                kill -9 $LEFT || true
+              fi
+            else
+              echo "未找到占用 8000 端口的进程"
+            fi
 
             echo "🚀 正在启动 FastAPI 应用..."
             nohup /var/www/meeting_assistant/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
+            APP_PID=$!
             echo "✅ FastAPI 已在后台运行，PID: $APP_PID"
 
             # 等待日志文件生成
