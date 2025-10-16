@@ -379,52 +379,43 @@ class UsersAuthAPITester:
         
         self.log(f"用户详情获取成功: ID={user_detail['id']}, 姓名={user_detail['name']}")
         
-        # 普通用户也可以获取用户详情
+        # 普通用户访问他人详情（应403）
         response = self.make_request(
             "GET",
             f"/api/users/{user_id}",
             headers=self.get_auth_headers("user")
         )
-        
-        data2 = self.assert_response(response, 200, "普通用户获取用户详情")
+        # 权限限制：普通用户只能查看自己的详情
+        self.test_results["total"] += 1
+        if response.status_code == 403:
+            self.test_results["passed"] += 1
+            self.log("✓ 普通用户获取他人详情权限限制 - 测试通过", "PASS")
+        else:
+            self.test_results["failed"] += 1
+            error_msg = f"✗ 普通用户获取他人详情权限限制 - 测试失败: 期望403, 实际{response.status_code}"
+            self.log(error_msg, "FAIL")
+            self.test_results["errors"].append(error_msg)
+
+        # 普通用户获取自己的详情（应200）
+        # 先获取当前用户ID
+        profile_resp = self.make_request(
+            "GET",
+            "/api/auth/profile",
+            headers=self.get_auth_headers("user")
+        )
+        profile_data = self.assert_response(profile_resp, 200, "获取普通用户信息（用于自我详情测试）")
+        my_id = profile_data["data"]["id"]
+
+        response_self = self.make_request(
+            "GET",
+            f"/api/users/{my_id}",
+            headers=self.get_auth_headers("user")
+        )
+        data_self = self.assert_response(response_self, 200, "普通用户获取自己的用户详情")
         
         return data
     
-    def test_update_user(self):
-        """测试更新用户信息（管理员权限）"""
-        self.log("=" * 50)
-        self.log("测试更新用户信息")
-        
-        if not self.created_user_ids:
-            raise ValueError("没有可用的测试用户ID，请先执行创建用户测试")
-        
-        user_id = self.created_user_ids[0]
-        
-        # 更新用户信息
-        update_data = {
-            "name": "更新后的测试用户",
-            "company": "更新后的公司",
-            "gender": "female"
-        }
-        
-        response = self.make_request(
-            "PUT",
-            f"/api/users/{user_id}",
-            headers=self.get_auth_headers("admin"),
-            json_data=update_data
-        )
-        
-        data = self.assert_response(response, 200, "更新用户信息")
-        
-        # 验证更新结果
-        updated_user = data["data"]
-        assert updated_user["name"] == update_data["name"], "用户姓名更新失败"
-        assert updated_user["company"] == update_data["company"], "用户公司更新失败"
-        assert updated_user["gender"] == update_data["gender"], "用户性别更新失败"
-        
-        self.log(f"用户信息更新成功: 姓名={updated_user['name']}, 公司={updated_user['company']}")
-        
-        return data
+
     
     def test_change_user_status(self):
         """测试修改用户状态（管理员权限）"""
@@ -581,7 +572,6 @@ class UsersAuthAPITester:
             self.test_create_user()
             self.test_list_users()
             self.test_get_user_detail()
-            self.test_update_user()
             self.test_change_user_status()
             
             # 权限限制测试

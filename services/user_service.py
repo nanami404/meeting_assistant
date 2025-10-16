@@ -44,7 +44,7 @@ class UserService(object):
                 phone=user_data.phone,
                 email=user_data.email,
                 company=user_data.company,
-                role=user_data.role or UserRole.USER.value,
+                user_role=user_data.role or UserRole.USER.value,
                 status=user_data.status or UserStatus.ACTIVE.value,
                 password_hash=hashed,
                 created_by=created_by
@@ -156,7 +156,7 @@ class UserService(object):
             query = db.query(User)
 
             if role:
-                query = query.filter(User.role == role)
+                query = query.filter(User.user_role == role)
             if status:
                 query = query.filter(User.status == status)
             
@@ -292,9 +292,12 @@ class UserService(object):
                 check_unique("user_name", provided.get("user_name"))
 
             # 应用更新（包括显式置为 None 的可选字段）
-            for field in ["name", "user_name", "gender", "phone", "email", "company", "role", "status"]:
+            # 注意：Pydantic 中为 role 字段，模型中为 user_role，需要映射
+            for field in ["name", "user_name", "gender", "phone", "email", "company", "status"]:
                 if field in provided:
                     setattr(user, field, provided.get(field))
+            if "role" in provided:
+                user.user_role = provided.get("role")
 
             # 审计字段
             if updated_by:

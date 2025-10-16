@@ -52,13 +52,13 @@ class User(Base):
     __tablename__ = "users"
 
     # 主键字段
-    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()), comment="用户UUID主键")
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="用户主键ID（自增）")
     # 基本信息字段
     name = Column(String(100), nullable=False, comment="用户姓名")
     user_name = Column(String(50), nullable=False, unique=True, comment="用户账号")
     gender = Column(String(20), nullable=True, comment="性别：male-男性，female-女性，other-其他")
     phone = Column(String(20), nullable=True, unique=True, comment="手机号码")
-    email = Column(String(255), nullable=False, unique=True, comment="邮箱地址")
+    email = Column(String(255), nullable=True, unique=True, comment="邮箱地址")
     company = Column(String(200), nullable=True, comment="所属单位名称")
 
     # 权限和状态字段
@@ -83,13 +83,9 @@ class User(Base):
     updated_meetings = relationship("Meeting", foreign_keys="Meeting.updated_by", back_populates="updater")
     participations = relationship("Participant", foreign_keys="Participant.user_code", back_populates="user")
 
-    # 用户与会议的关联关系（多对多，通过中间表）
-    meeting_associations = relationship(
-        "UserMeetingAssociation",
-        foreign_keys="UserMeetingAssociation.user_id",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
+    # 注意：原先这里定义了与未实现模型 UserMeetingAssociation 的关系，
+    # 由于该模型未在代码库中定义，SQLAlchemy 在初始化映射时会抛出错误。
+    # 为确保认证与用户相关功能正常工作，移除该未定义关系。
 
     # 自引用关系
     creator_user = relationship("User", foreign_keys=[created_by], remote_side=[id])

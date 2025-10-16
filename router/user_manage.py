@@ -119,7 +119,7 @@ async def profile(current_user: User = Depends(require_auth)):
             phone=current_user.phone,
             email=current_user.email,
             company=current_user.company,
-            role=current_user.role,
+            role=current_user.user_role,
             status=current_user.status,
             created_at=current_user.created_at,
             updated_at=current_user.updated_at,
@@ -227,7 +227,7 @@ async def create_user(
             phone=user.phone,
             email=user.email,
             company=user.company,
-            role=user.role,
+            role=user.user_role,
             status=user.status,
             created_at=user.created_at,
             updated_at=user.updated_at,
@@ -275,7 +275,7 @@ async def register_user(
             phone=user.phone,
             email=user.email,
             company=user.company,
-            role=user.role,
+            role=user.user_role,
             status=user.status,
             created_at=user.created_at,
             updated_at=user.updated_at,
@@ -335,7 +335,7 @@ async def list_users(
                 gender=u.gender,
                 phone=u.phone,
                 company=u.company,
-                role=u.role,
+                role=u.user_role,
                 status=u.status,
                 created_at=u.created_at,
                 updated_at=u.updated_at,
@@ -353,7 +353,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db), current_user: Us
     """获取用户详情（权限控制：普通用户只能查询自己的信息，管理员可以查询任意用户信息）"""
     try:
         # 权限检查：普通用户只能查询自己的信息，管理员可以查询任意用户信息
-        if current_user.role != "admin" and current_user.id != user_id:
+        if current_user.user_role != "admin" and current_user.id != user_id:
             _raise(status.HTTP_403_FORBIDDEN, "权限不足，只能查询自己的用户信息", "forbidden")
         
         user = await user_service.get_user_by_id(db, user_id)
@@ -367,7 +367,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db), current_user: Us
             gender=user.gender,
             phone=user.phone,
             company=user.company,
-            role=user.role,
+            role=user.user_role,
             status=user.status,
             created_at=user.created_at,
             updated_at=user.updated_at,
@@ -397,7 +397,7 @@ async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(g
             gender=user.gender,
             phone=user.phone,
             company=user.company,
-            role=user.role,
+            role=user.user_role,
             status=user.status,
             created_at=user.created_at,
             updated_at=user.updated_at,

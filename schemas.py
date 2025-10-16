@@ -243,6 +243,7 @@ class UserUpdate(BaseModel):
     """
     name: str = Field(..., min_length=1, max_length=100, description="用户姓名")
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
+    email: Optional[EmailStr] = Field(None, description="邮箱地址")
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
