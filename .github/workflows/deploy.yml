@@ -14,7 +14,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 部署到远程服务器
-        uses: appleboy/ssh-action@v1.0.3
+        uses: meeting_assistantleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -22,24 +22,24 @@ jobs:
           port: 22
           script_stop: true
           script: |
-            cd /var/www/app || exit 1
+            cd /var/www/meeting_assistant || exit 1
 
             echo "🔄 正在从 GitHub 拉取最新代码..."
             git pull origin main
 
             echo "📦 正在安装/更新 Python 依赖..."
-            if [ ! -d "/var/www/app/venv" ]; then
+            if [ ! -d "/var/www/meeting_assistant/venv" ]; then
               echo "✨ 未发现 venv，正在创建..."
-              python3 -m venv /var/www/app/venv
+              python3 -m venv /var/www/meeting_assistant/venv
             fi
 
             # 升级 pip（使用清华镜像）
-            /var/www/app/venv/bin/python -m pip install --upgrade pip \
+            /var/www/meeting_assistant/venv/bin/python -m pip install --upgrade pip \
               -i https://pypi.tuna.tsinghua.edu.cn/simple \
               --trusted-host pypi.tuna.tsinghua.edu.cn
 
             # 安装依赖（使用清华镜像 + 无缓存）
-            /var/www/app/venv/bin/pip install --no-cache-dir -r requirements.txt \
+            /var/www/meeting_assistant/venv/bin/pip install --no-cache-dir -r requirements.txt \
               -i https://pypi.tuna.tsinghua.edu.cn/simple \
               --trusted-host pypi.tuna.tsinghua.edu.cn
 
@@ -47,16 +47,16 @@ jobs:
             pkill uvicorn || true   
 
             echo "🚀 正在启动 FastAPI 应用..."
-            nohup /var/www/blog/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
+            nohup /var/www/blog/venv/bin/python -m uvicorn main:meeting_assistant --host 0.0.0.0 --port 8000 --workers 2 > meeting_assistant.log 2>&1 &
             echo "✅ FastAPI 已在后台运行，PID: $APP_PID"
 
             # 等待日志文件生成
             sleep 2
 
             echo "✅ 部署成功，时间：$(date)"
-            if [ -f app.log ]; then
+            if [ -f meeting_assistant.log ]; then
               echo "📄 最近 50 行应用日志："
-              tail -n 50 app.log
+              tail -n 50 meeting_assistant.log
             else
-              echo "⚠️ app.log 尚未生成，但应用已在后台启动。"
+              echo "⚠️ meeting_assistant.log 尚未生成，但应用已在后台启动。"
             fi
