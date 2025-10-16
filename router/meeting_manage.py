@@ -2,14 +2,11 @@
 import base64
 import os
 import json
-<<<<<<< HEAD
 from typing import List, Generator
 from datetime import datetime
-=======
 from typing import List
 from typing import Generator
 from datetime import datetime, timezone
->>>>>>> 75e900654d8ef83ccaebe3e057c405e5c670b7e6
 from pathlib import Path
 from urllib.parse import quote_plus
 import pytz
@@ -128,7 +125,6 @@ async def get_meetings(current_user_id: str, db: Session = Depends(get_db))-> li
         logger.error(f"Failed to retrieve meetings for user: {current_user_id}, error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
 @router.get("/{meeting_id}/user/{user_id}", response_model=MeetingResponse)
 async def get_meeting(meeting_id: str, user_id: str, db: Session = Depends(get_db)) -> MeetingResponse:
     """Get a specific meeting with user validation"""
@@ -157,7 +153,6 @@ async def get_meeting(meeting_id: str, user_id: str, db: Session = Depends(get_d
         logger.error(f"Failed to retrieve meeting {meeting_id} for user: {user_id}, error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
 @router.put("/{meeting_id}/user/{user_id}", response_model=MeetingResponse)
 def update_meeting(meeting_id: str, user_id: str,meeting: MeetingCreate, db: Session = Depends(get_db))-> MeetingResponse:
     """Update a meeting"""
@@ -166,7 +161,6 @@ def update_meeting(meeting_id: str, user_id: str,meeting: MeetingCreate, db: Ses
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
     return updated_meeting
 
-
 @router.delete("/{meeting_id}/user/{user_id}")
 async def delete_meeting(meeting_id: str, user_id: str,db: Session = Depends(get_db))-> dict[str, str]:
     """Delete a meeting"""
@@ -174,7 +168,6 @@ async def delete_meeting(meeting_id: str, user_id: str,db: Session = Depends(get
     if not success:
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
     return {"message": "Meeting deleted successfully"}
-
 
 # Document generation endpoints
 @router.post("/{meeting_id}/generate-notification")
@@ -191,7 +184,6 @@ async def generate_notification(meeting_id: str, user_id: str, db: Session = Dep
         return {"document_path": doc_path, "message": "Notification generated successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 @router.post("/{meeting_id}/generate-minutes")
 async def generate_minutes(meeting_id: str,user_id: str,  db: Session = Depends(get_db)):
@@ -230,12 +222,10 @@ async def send_notification(meeting_id: str, db: Session = Depends(get_db))-> di
         raise HTTPException(status_code=400, detail=str(e))
 
 
-
 EXTERNAL_API_URL = "ws://192.168.18.246:10095"
 
 # 复用 AsyncClient（避免每次调用创建新连接，提升性能）
 async_client = AsyncClient(timeout=5)
-
 
 # Upload audio file for transcription
 @router.post("/{meeting_id}/upload-audio")
@@ -294,11 +284,7 @@ async def upload_audio(
                 meeting_id=meeting_id,
                 speaker_id=speaker_id,
                 text=transcription,
-<<<<<<< HEAD
-                timestamp=datetime.now(timezone.utc)
-=======
                 timestamp=datetime.now(timezone.utc).isoformat() + "Z"
->>>>>>> 75e900654d8ef83ccaebe3e057c405e5c670b7e6
             )
             await meeting_service.save_transcription(db, transcription_record)
 
