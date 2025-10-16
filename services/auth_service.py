@@ -74,7 +74,7 @@ class AuthService:
         payload: Dict[str, Any] = {
             "sub": str(user.id),
             "email": user.email,
-            "role": user.role,
+            "role": user.user_role,
             "type": token_type,
             "jti": jti,
             "iat": int(now.timestamp()),

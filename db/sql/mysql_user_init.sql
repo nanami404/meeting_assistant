@@ -50,15 +50,9 @@ CREATE TABLE `users` (
     UNIQUE KEY `uk_users_user_name` (`user_name`),
 
     -- 普通索引（对应SQLAlchemy的Index定义）
-    KEY `idx_users_email` (`email`),
-    KEY `idx_users_phone` (`phone`),
     KEY `idx_users_user_name` (`user_name`),
     KEY `idx_users_role` (`user_role`),
     KEY `idx_users_status` (`status`),
-    KEY `idx_users_company` (`company`),
-    KEY `idx_users_created_at` (`created_at`),
-    KEY `idx_users_created_by` (`created_by`),
-    KEY `idx_users_updated_by` (`updated_by`)
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户信息表';
 

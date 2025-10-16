@@ -73,7 +73,7 @@ def require_auth(current_user: User = Depends(get_current_user)) -> User:
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """装饰器/依赖：要求管理员权限"""
-    if current_user.role != UserRole.ADMIN.value:
+    if current_user.user_role != UserRole.ADMIN.value:
         _raise_http(status.HTTP_403_FORBIDDEN, "需要管理员权限", "forbidden")
     return current_user
 
@@ -86,7 +86,7 @@ def require_roles(roles: List[str]) -> Callable:
             ...
     """
     def dependency(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role not in roles:
+        if current_user.user_role not in roles:
             _raise_http(status.HTTP_403_FORBIDDEN, f"需要角色之一: {', '.join(roles)}", "forbidden")
         return current_user
 

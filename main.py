@@ -20,6 +20,7 @@ from services.meeting_service import MeetingService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
+from services.redis_service import init_redis_service, cleanup_redis_service
 import router
 from router import user_manage as user_router
 
@@ -47,6 +48,27 @@ engine = create_engine(
 # Create database tables
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Meeting Assistant API", version="1.0.0")
+
+# 应用生命周期事件处理
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时的初始化操作"""
+    logger.info("Meeting Assistant API 正在启动...")
+    
+    # 初始化Redis服务
+    await init_redis_service()
+    
+    logger.success("Meeting Assistant API 启动完成")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭时的清理操作"""
+    logger.info("Meeting Assistant API 正在关闭...")
+    
+    # 清理Redis服务
+    await cleanup_redis_service()
+    
+    logger.info("Meeting Assistant API 已关闭")
 
 # 读取API配置（从环境变量）
 API_HOST = os.getenv("API_HOST", "0.0.0.0")  # 默认0.0.0.0
@@ -119,6 +141,10 @@ app.include_router(router.message_manage)
 
 
 
+
+# 添加健康检查路由
+from router.health_check import router as health_router
+app.include_router(health_router)
 
 if __name__ == "__main__":
     import uvicorn

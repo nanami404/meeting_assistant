@@ -22,32 +22,45 @@ jobs:
           port: 22
           script_stop: true
           script: |
-            cd /var/www/blog || exit 1
+            cd /var/www/meeting_assistant || exit 1
 
             echo "🔄 正在从 GitHub 拉取最新代码..."
             git pull origin main
 
             echo "📦 正在安装/更新 Python 依赖..."
-            if [ ! -d "/var/www/blog/venv" ]; then
+            if [ ! -d "/var/www/meeting_assistant/venv" ]; then
               echo "✨ 未发现 venv，正在创建..."
-              python3 -m venv /var/www/blog/venv
+              python3 -m venv /var/www/meeting_assistant/venv
             fi
 
             # 升级 pip（使用清华镜像）
-            /var/www/blog/venv/bin/python -m pip install --upgrade pip \
+            /var/www/meeting_assistant/venv/bin/python -m pip install --upgrade pip \
               -i https://pypi.tuna.tsinghua.edu.cn/simple \
               --trusted-host pypi.tuna.tsinghua.edu.cn
 
             # 安装依赖（使用清华镜像 + 无缓存）
-            /var/www/blog/venv/bin/pip install --no-cache-dir -r requirements.txt \
+            /var/www/meeting_assistant/venv/bin/pip install --no-cache-dir -r requirements.txt \
               -i https://pypi.tuna.tsinghua.edu.cn/simple \
               --trusted-host pypi.tuna.tsinghua.edu.cn
 
-            #echo "🛑 正在停止已存在的 FastAPI 进程..."
-            pkill uvicorn || true   
+            echo "🛑 停止 FastAPI 服务（端口 8000）..."
+            PIDS=$(lsof -t -iTCP:8000 -sTCP:LISTEN 2>/dev/null || echo "")
+            if [ -n "$PIDS" ]; then
+              echo "优雅停止: $PIDS"
+              kill -TERM $PIDS || true
+              sleep 2
+              LEFT=$(lsof -t -iTCP:8000 -sTCP:LISTEN 2>/dev/null || echo "")
+              if [ -n "$LEFT" ]; then
+                echo "强制停止: $LEFT"
+                kill -9 $LEFT || true
+              fi
+            else
+              echo "未找到占用 8000 端口的进程"
+            fi
 
             echo "🚀 正在启动 FastAPI 应用..."
-            nohup /var/www/blog/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
+            nohup /var/www/meeting_assistant/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
+            APP_PID=$!
             echo "✅ FastAPI 已在后台运行，PID: $APP_PID"
 
             # 等待日志文件生成

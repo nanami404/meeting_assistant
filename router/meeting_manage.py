@@ -2,8 +2,14 @@
 import base64
 import os
 import json
+<<<<<<< HEAD
 from typing import List, Generator
 from datetime import datetime
+=======
+from typing import List
+from typing import Generator
+from datetime import datetime, timezone
+>>>>>>> 75e900654d8ef83ccaebe3e057c405e5c670b7e6
 from pathlib import Path
 from urllib.parse import quote_plus
 import pytz
@@ -288,7 +294,11 @@ async def upload_audio(
                 meeting_id=meeting_id,
                 speaker_id=speaker_id,
                 text=transcription,
+<<<<<<< HEAD
                 timestamp=datetime.now(timezone.utc)
+=======
+                timestamp=datetime.now(timezone.utc).isoformat() + "Z"
+>>>>>>> 75e900654d8ef83ccaebe3e057c405e5c670b7e6
             )
             await meeting_service.save_transcription(db, transcription_record)
 

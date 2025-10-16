@@ -15,6 +15,7 @@ class ResetPasswordAPITester:
         self.user_credentials = {"username": "demo_user", "password": "123456"}
         self.admin_tokens = {}
         self.created_user_ids = []
+        self.test_results = []  # (测试名称, 是否成功)
 
     def log(self, message: str, level: str = "INFO"):
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -73,10 +74,23 @@ class ResetPasswordAPITester:
 
     def try_login(self, username: str, password: str) -> bool:
         resp = self.make_request("POST", "/api/auth/login", json_data={"username": username, "password": password})
-        try:
-            data = self.assert_response(resp, 200, f"尝试登录({password})")
-            return "access_token" in data.get("data", {})
-        except Exception:
+        # 改为非强制断言，以便在预期失败时不打印FAIL日志
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                ok = data.get("code") == 0 and "access_token" in data.get("data", {})
+                if ok:
+                    self.log(f"✓ 尝试登录({password}) - 成功", "PASS")
+                else:
+                    self.log(f"✗ 尝试登录({password}) - 业务错误: {data}", "FAIL")
+                return ok
+            except Exception:
+                self.log(f"✗ 尝试登录({password}) - 响应不是JSON", "FAIL")
+                return False
+        else:
+            # 对于401等失败情况，记录信息而不是FAIL（因为在部分测试步骤中属于预期）
+            self.log(f"尝试登录({password}) - 失败，状态码: {resp.status_code}", "INFO")
+            self.log(f"响应内容: {resp.text}", "DEBUG")
             return False
 
     def reset_password_admin(self, user_id: int):
@@ -106,30 +120,90 @@ class ResetPasswordAPITester:
             finally:
                 self.created_user_ids.remove(uid)
 
+    def add_result(self, test_name: str, success: bool):
+        """记录单个测试结果"""
+        self.test_results.append((test_name, success))
+
+    def print_summary(self) -> bool:
+        """打印测试汇总并返回是否全部通过"""
+        print(f"\n{'='*60}")
+        print("测试总结")
+        print(f"{'='*60}")
+        passed = sum(1 for _, s in self.test_results if s)
+        total = len(self.test_results)
+        for name, s in self.test_results:
+            status = "✅ 通过" if s else "❌ 失败"
+            print(f"{name}: {status}")
+        print(f"\n总计: {passed}/{total} 个测试通过")
+        if passed == total:
+            print("🎉 所有测试通过！重置密码流程正常。")
+            all_passed = True
+        else:
+            print("⚠️  部分测试失败，请检查接口或测试逻辑。")
+            all_passed = False
+        return all_passed
+
     def run(self):
         try:
-            self.admin_login()
-            user_id, username = self.create_user_with_custom_password()
+            # 1. 管理员登录
+            try:
+                self.admin_login()
+                self.add_result("管理员登录", True)
+            except Exception:
+                self.add_result("管理员登录", False)
+                return False
 
-            # 自定义密码可登录
-            assert self.try_login(username, "CustomPwd123"), "自定义密码登录失败"
+            # 2. 创建自定义密码用户
+            try:
+                user_id, username = self.create_user_with_custom_password()
+                self.add_result("创建自定义密码用户", True)
+            except Exception:
+                self.add_result("创建自定义密码用户", False)
+                return False
 
-            # 管理员重置
-            self.reset_password_admin(user_id)
+            # 3. 使用自定义密码登录应成功
+            custom_login_ok = self.try_login(username, "CustomPwd123")
+            self.add_result("自定义密码可登录", custom_login_ok)
+            if not custom_login_ok:
+                return False
 
-            # 自定义密码应失效，默认密码应可登录
-            assert not self.try_login(username, "CustomPwd123"), "重置后自定义密码仍可登录"
-            assert self.try_login(username, "Test@1234"), "重置后默认密码不可登录"
+            # 4. 管理员重置密码
+            try:
+                self.reset_password_admin(user_id)
+                self.add_result("管理员重置密码", True)
+            except Exception:
+                self.add_result("管理员重置密码", False)
+                return False
 
-            # 普通用户禁止重置（使用刚被重置后的用户令牌）
-            self.user_forbidden_reset(user_id, username, "Test@1234")
+            # 5. 重置后自定义密码应不可登录
+            custom_after_reset_fail = not self.try_login(username, "CustomPwd123")
+            self.add_result("重置后自定义密码不可登录", custom_after_reset_fail)
+
+            # 6. 重置后默认密码应可登录
+            default_login_ok = self.try_login(username, "Test@1234")
+            self.add_result("重置后默认密码可登录", default_login_ok)
+            if not default_login_ok:
+                return False
+
+            # 7. 普通用户禁止重置（403）
+            try:
+                self.user_forbidden_reset(user_id, username, "Test@1234")
+                self.add_result("普通用户重置密码被禁止(403)", True)
+            except Exception:
+                self.add_result("普通用户重置密码被禁止(403)", False)
+                return False
+
+            return True
         finally:
             self.cleanup()
 
 
 def main():
     tester = ResetPasswordAPITester()
-    tester.run()
+    success = tester.run()
+    # 统一输出测试汇总
+    tester.print_summary()
+    exit(0 if success else 1)
 
 
 if __name__ == "__main__":

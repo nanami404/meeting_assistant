@@ -257,6 +257,7 @@ class UserUpdate(BaseModel):
     """
     name: str = Field(..., min_length=1, max_length=100, description="用户姓名")
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
+    email: Optional[EmailStr] = Field(None, description="邮箱地址")
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
@@ -270,7 +271,7 @@ class MessageCreate(BaseModel):
     """发送消息请求模型"""
     title: str
     content: str
-    receiver_id: int
+    recipient_ids: List[int] = Field(..., min_items=1, description="接收者ID列表，至少包含一个接收者")
 
 class MessageResponse(BaseModel):
     """消息响应模型"""
@@ -278,10 +279,8 @@ class MessageResponse(BaseModel):
     title: str
     content: str
     sender_id: int
-    receiver_id: int
-    is_read: bool
+    recipient_ids: List[int] = Field(default_factory=list, description="接收者ID列表")
     created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
