@@ -25,7 +25,6 @@ CREATE TABLE `messages` (
 
     -- 关联字段
     `sender_id` BIGINT NOT NULL COMMENT '发送者ID',
-    `receiver_id` BIGINT NOT NULL COMMENT '接收者ID',
 
     -- 状态字段
     `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读(0未读/1已读)',
@@ -39,7 +38,6 @@ CREATE TABLE `messages` (
 
     -- 索引
     KEY `idx_messages_sender_id` (`sender_id`),
-    KEY `idx_messages_receiver_id` (`receiver_id`),
     KEY `idx_messages_is_read` (`is_read`),
     KEY `idx_messages_created_at` (`created_at`)
 

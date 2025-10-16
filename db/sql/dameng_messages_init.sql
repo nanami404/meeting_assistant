@@ -33,7 +33,6 @@ CREATE TABLE messages (
 
     -- 关联字段
     sender_id     NUMBER(19)         NOT NULL,
-    receiver_id   NUMBER(19)         NOT NULL,
 
     -- 状态字段
     is_read       NUMBER(1)          DEFAULT 0 NOT NULL,
@@ -52,14 +51,12 @@ COMMENT ON COLUMN messages.id IS '主键ID（自增）';
 COMMENT ON COLUMN messages.title IS '消息标题';
 COMMENT ON COLUMN messages.content IS '消息内容';
 COMMENT ON COLUMN messages.sender_id IS '发送者ID';
-COMMENT ON COLUMN messages.receiver_id IS '接收者ID';
 COMMENT ON COLUMN messages.is_read IS '是否已读(0未读/1已读)';
 COMMENT ON COLUMN messages.created_at IS '创建时间';
 COMMENT ON COLUMN messages.updated_at IS '更新时间';
 
 -- 普通索引（与MySQL版本保持一致）
 CREATE INDEX idx_messages_sender_id   ON messages(sender_id);
-CREATE INDEX idx_messages_receiver_id ON messages(receiver_id);
 CREATE INDEX idx_messages_is_read     ON messages(is_read);
 CREATE INDEX idx_messages_created_at  ON messages(created_at);
 
@@ -88,7 +85,6 @@ SELECT
     id,
     title,
     sender_id,
-    receiver_id,
     is_read,
     created_at
 FROM messages
