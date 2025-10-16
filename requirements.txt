@@ -23,6 +23,8 @@ requests==2.31.0
 python-dotenv==1.1.1
 fastapi_utils
 loguru==0.7.3
+# Redis客户端 - 用于消息缓存、实时推送和会话管理
+redis[hiredis]>=4.5.0
 pytz==2023.3.post1
 pytest==8.4.1
 pytest-asyncio==1.1.0
