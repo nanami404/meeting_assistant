@@ -1,6 +1,6 @@
 # 标准库
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Tuple
 import re
 
@@ -302,7 +302,7 @@ class UserService(object):
             # 审计字段
             if updated_by:
                 user.updated_by = updated_by
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(timezone.utc)
 
             db.commit()
             db.refresh(user)

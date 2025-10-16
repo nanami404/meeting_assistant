@@ -66,9 +66,7 @@ class MeetingService(object):
         meeting.location = meeting_data.location
         meeting.duration_minutes = meeting_data.duration_minutes
         meeting.agenda = meeting_data.agenda
-        #meeting.updated_at = datetime.now(timezone.utc)  #
-        meeting.updated_at = datetime.utcnow()
-        # Update participants - remove existing and add new ones
+        meeting.updated_at = datetime.now(timezone.utc)
         db.query(Participant).filter(Participant.meeting_id == meeting_id).delete()
         for participant_data in meeting_data.participants:
             participant = Participant(

@@ -4,7 +4,7 @@ import os
 import json
 from typing import List
 from typing import Generator
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
 import pytz
@@ -410,7 +410,7 @@ async def upload_audio(
                 meeting_id=meeting_id,
                 speaker_id=speaker_id,
                 text=transcription,
-                timestamp=datetime.utcnow().isoformat() + "Z"
+                timestamp=datetime.now(timezone.utc).isoformat() + "Z"
             )
             await meeting_service.save_transcription(db, transcription_record)
 

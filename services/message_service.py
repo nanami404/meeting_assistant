@@ -1,5 +1,5 @@
 # 标准库
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple, Dict, Any
 import time
 import json
@@ -674,7 +674,7 @@ class MessageService:
         # 使用事务确保数据一致性
         transaction = self.db.begin()
         try:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
             
             # 批量更新MessageRecipient表
             updated_recipients = self.db.query(MessageRecipient).filter(
@@ -938,7 +938,7 @@ class MessageService:
             ).update(
                 {
                     MessageRecipient.is_read: True,
-                    MessageRecipient.read_at: datetime.utcnow()
+                    MessageRecipient.read_at: datetime.now(timezone.utc)
                 },
                 synchronize_session=False
             )
