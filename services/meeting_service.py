@@ -2,6 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
+from loguru import logger
 
 # 第三方库
 from sqlalchemy.orm import Session
@@ -46,18 +47,54 @@ class MeetingService(object):
         db.refresh(meeting)
         return meeting
 
-    async def get_meetings(self, db: Session) -> list[Meeting]:
-        """Get all meetings"""
-        return db.query(Meeting).order_by(Meeting.date_time.desc()).all()
 
-    async def get_meeting(self, db: Session, meeting_id: str) -> Optional[Meeting]:
-        """Get a specific meeting by ID"""
-        return db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    async def get_meetings(self, db: Session, current_user_id: str) -> list[Meeting]:
+        """Get all meetings - admin users see all, regular users see only their meetings"""
+        # 查询用户角色
+        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
 
-    async def update_meeting(self, db: Session, meeting_id: str, meeting_data: MeetingCreate) -> Optional[Meeting]:
+        query = db.query(Meeting)
+
+        # 如果不是管理员，添加参与者过滤条件
+        if user_role != "admin":
+            query = query.join(Participant, Meeting.id == Participant.meeting_id) \
+                .filter(Participant.user_code == current_user_id) \
+                .distinct()
+
+        # 统一按时间排序
+        query = query.order_by(Meeting.date_time.desc())
+
+        logger.info(f"User {current_user_id} (role: {user_role}) retrieved meetings")
+        return query.all()
+
+    async def get_meeting(self, db: Session, meeting_id: str, current_user_id: str) -> Optional[Meeting]:
+        """Get a specific meeting by ID and validate user access using JOIN"""
+        # 查询用户角色
+        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
+        query = db.query(Meeting)
+        # 如果不是管理员，添加参与者验证条件
+        if user_role != "admin":
+            query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
+                Participant.user_code == current_user_id)
+
+        # 添加会议ID过滤条件
+        meeting = query.filter(Meeting.id == meeting_id).first()
+        return meeting
+
+    async def update_meeting(self, db: Session, meeting_id: str, meeting_data: MeetingCreate, current_user_id: str) -> Optional[Meeting]:
         """Update a meeting"""
         from time import timezone
-        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        # 查询用户角色
+        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
+        query = db.query(Meeting)
+        print("当前角色", user_role)
+        if user_role != "admin":
+            query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
+                Participant.user_code == current_user_id)
+
+
+        meeting = query.filter(Meeting.id == meeting_id).first()
+
         if not meeting:
             return None
         # Update meeting fields
@@ -72,12 +109,17 @@ class MeetingService(object):
         # Update participants - remove existing and add new ones
         db.query(Participant).filter(Participant.meeting_id == meeting_id).delete()
         for participant_data in meeting_data.participants:
+            user = db.query(User).filter(User.name == participant_data.name).first()
+            if not user:
+                # 处理用户不存在的情况（根据业务需求选择抛错或跳过）
+                raise ValueError(f"用户 '{participant_data.name}' 不存在，请检查姓名是否正确")
             participant = Participant(
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
+                user_code=user.id,
                 name=participant_data.name,
                 email=participant_data.email,
-                role=participant_data.role,
+                user_role=participant_data.user_role,
                 is_required=participant_data.is_required
             )
             db.add(participant)
@@ -85,9 +127,16 @@ class MeetingService(object):
         db.refresh(meeting)
         return meeting
 
-    async def delete_meeting(self, db: Session, meeting_id: str) -> bool:
+
+    async def delete_meeting(self, db: Session, meeting_id: str, current_user_id: str) -> bool:
         """Delete a meeting"""
-        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        # 查询用户角色
+        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
+        query = db.query(Meeting)
+        if user_role != "admin":
+            query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
+                Participant.user_code == current_user_id)
+        meeting = query.filter(Meeting.id == meeting_id).first()
         if not meeting:
             return False
 

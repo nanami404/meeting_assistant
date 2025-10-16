@@ -2,22 +2,23 @@
 import base64
 import os
 import json
-from typing import List
-from typing import Generator
+from typing import List, Generator
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote_plus
 import pytz
 from loguru import logger
 from httpx import AsyncClient
+from builtins import anext
 
 #第三方库
-from fastapi import  WebSocket, WebSocketDisconnect, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydub import AudioSegment
+
+from fastapi import  WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi import APIRouter,HTTPException, Depends
 
 #自定义库
@@ -30,8 +31,6 @@ from services.email_service import EmailService
 from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
 
 
-
-
 router = APIRouter(prefix="/api/meetings", tags=["Mettings"])
 # 获取东八区当前时间
 tz = pytz.timezone("Asia/Shanghai")
@@ -41,11 +40,9 @@ meeting_service = MeetingService()
 document_service = DocumentService()
 speech_service = SpeechService()
 email_service = EmailService()
-
 manager = ConnectionManager()
 
 MEETING_NOT_FOUND_DETAIL = "Meeting not found"
-
 
 # 对外暴露的依赖注入函数
 db_config = DatabaseConfig()
@@ -53,11 +50,9 @@ db_manager = DatabaseSessionManager(db_config)
 get_db = db_manager.get_sync_session  # 同步会话依赖
 get_async_db = db_manager.get_async_session  #
 
-
 @router.get("/open")
 async def root()->dict[str, str]:
     return {"message": "Meeting Assistant API is running"}
-
 
 # Meeting management endpoints
 @router.post("/", response_model=MeetingResponse)
@@ -107,34 +102,69 @@ async def create_meeting(meeting: MeetingCreate, db: Session = Depends(get_db)) 
             detail="服务器内部错误，创建会议失败"
         )
 
-@router.get("/", response_model=List[MeetingResponse])
-async def get_meetings(db: Session = Depends(get_db))-> list[MeetingResponse]:
+@router.get("/user/{current_user_id}", response_model=List[MeetingResponse])
+async def get_meetings(current_user_id: str, db: Session = Depends(get_db))-> list[MeetingResponse]:
     """Get all meetings"""
-    return await meeting_service.get_meetings(db)
+    try:
+        # 验证 current_user_id 是否合法
+        if not current_user_id or not isinstance(current_user_id, str):
+            raise HTTPException(status_code=400, detail="Invalid user ID")
+
+        # 获取会议列表
+        meetings = await meeting_service.get_meetings(db, current_user_id)
+
+        # 记录成功日志
+        logger.info(f"Successfully retrieved meetings for user: {current_user_id}")
+
+        return meetings
+    except Exception as e:
+        # 记录错误日志
+        logger.error(f"Failed to retrieve meetings for user: {current_user_id}, error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{meeting_id}", response_model=MeetingResponse)
-async def get_meeting(meeting_id: str, db: Session = Depends(get_db))-> MeetingResponse:
-    """Get a specific meeting"""
-    meeting = await meeting_service.get_meeting(db, meeting_id)
-    if not meeting:
-        raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
-    return meeting
+@router.get("/{meeting_id}/user/{user_id}", response_model=MeetingResponse)
+async def get_meeting(meeting_id: str, user_id: str, db: Session = Depends(get_db)) -> MeetingResponse:
+    """Get a specific meeting with user validation"""
+    try:
+        # 验证 user_id 是否合法
+        if not user_id or not isinstance(user_id, str):
+            raise HTTPException(status_code=400, detail="Invalid user ID")
+
+        # 验证 meeting_id 是否合法
+        if not meeting_id or not isinstance(meeting_id, str):
+            raise HTTPException(status_code=400, detail="Invalid meeting ID")
+
+        # 获取会议信息并验证用户权限
+        meeting = await meeting_service.get_meeting(db, meeting_id, user_id)
+        if not meeting:
+            raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
+
+        # 记录成功日志
+        logger.info(f"Successfully retrieved meeting {meeting_id} for user: {user_id}")
+
+        return meeting
+    except HTTPException:
+        raise
+    except Exception as e:
+        # 记录错误日志
+        logger.error(f"Failed to retrieve meeting {meeting_id} for user: {user_id}, error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.put("/{meeting_id}", response_model=MeetingResponse)
-async def update_meeting(meeting_id: str, meeting: MeetingCreate, db: Session = Depends(get_db))-> MeetingResponse:
+@router.put("/{meeting_id}/user/{user_id}", response_model=MeetingResponse)
+def update_meeting(meeting_id: str, user_id: str,meeting: MeetingCreate, db: Session = Depends(get_db))-> MeetingResponse:
     """Update a meeting"""
-    updated_meeting = await meeting_service.update_meeting(db, meeting_id, meeting)
+    updated_meeting = meeting_service.update_meeting(db, meeting_id, meeting,user_id)
     if not updated_meeting:
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
     return updated_meeting
 
 
-@router.delete("/{meeting_id}")
-async def delete_meeting(meeting_id: str, db: Session = Depends(get_db))-> dict[str, str]:
+@router.delete("/{meeting_id}/user/{user_id}")
+async def delete_meeting(meeting_id: str, user_id: str,db: Session = Depends(get_db))-> dict[str, str]:
     """Delete a meeting"""
-    success = await meeting_service.delete_meeting(db, meeting_id)
+    success = await meeting_service.delete_meeting(db, meeting_id,user_id)
     if not success:
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
     return {"message": "Meeting deleted successfully"}
@@ -142,12 +172,12 @@ async def delete_meeting(meeting_id: str, db: Session = Depends(get_db))-> dict[
 
 # Document generation endpoints
 @router.post("/{meeting_id}/generate-notification")
-async def generate_notification(meeting_id: str, db: Session = Depends(get_db)):
+async def generate_notification(meeting_id: str, user_id: str, db: Session = Depends(get_db)):
     """Generate meeting notification document
         生成会议通知文档
     """
     try:
-        meeting = await meeting_service.get_meeting(db, meeting_id)
+        meeting = await meeting_service.get_meeting(db, meeting_id,user_id)
         if not meeting:
             raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
 
@@ -158,12 +188,12 @@ async def generate_notification(meeting_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{meeting_id}/generate-minutes")
-async def generate_minutes(meeting_id: str, db: Session = Depends(get_db)):
+async def generate_minutes(meeting_id: str,user_id: str,  db: Session = Depends(get_db)):
     """Generate meeting minutes document
        生成会议纪要文档
     """
     try:
-        meeting = await meeting_service.get_meeting(db, meeting_id)
+        meeting = await meeting_service.get_meeting(db, meeting_id, user_id)
         if not meeting:
             raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
 
@@ -200,141 +230,6 @@ EXTERNAL_API_URL = "ws://192.168.18.246:10095"
 # 复用 AsyncClient（避免每次调用创建新连接，提升性能）
 async_client = AsyncClient(timeout=5)
 
-
-
-@router.websocket("/ws/{meeting_id}")
-#@router.websocket("wss://ai.csg.cn/aihear-50-249/app/hisee/websocket/storage/57fb5931-f776-4b18-be59-a137f706a949/appid=tainsureAssistant,uid=555fd741-5023-4ea8-84ff-b702a087137b,ack=1,pk_on=1")
-async def websocket_endpoint(websocket: WebSocket, meeting_id: str):
-    """
-        await websocket.accept()
-    # 获取请求头中的鉴权信息
-    token = websocket.headers.get("access-token")
-    if not token:
-        await websocket.close(code=1008, reason="Missing access token")
-        return
-
-    :param websocket:
-    :param meeting_id:
-    :return:
-    """
-
-    await manager.connect(websocket, meeting_id)
-    # 音频块累积缓冲区（解决单块过短问题，例如累积1秒再转译）
-    audio_buffer = b""  # 二进制缓冲区
-    # 16kHz * 1秒 * 16bit（2字节/样本）≈32000字节
-    buffer_threshold = 16000 * 1 * 2
-
-    try:
-        while True:
-            data = await websocket.receive_text()
-            message_data = json.loads(data)
-
-            if message_data.get("type") == "audio_chunk":
-
-                # 1. 提取并解码音频数据（关键修复：Base64转二进制）
-                audio_base64 = message_data.get("audio_data")
-                speaker_id = message_data.get("speaker_id", "unknown")
-
-                if not audio_base64:
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": "Missing audio_data in request"
-                    }))
-                    continue
-                try:
-                    # Base64解码为二进制音频数据
-                    audio_bytes = base64.b64decode(audio_base64)
-                except ValueError:
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": "Invalid Base64 encoding for audio_data"
-                    }))
-                    continue
-
-                # 2. 累积音频块（解决单块过短问题）
-                audio_buffer += audio_bytes
-                # 达到阈值（如2秒）再转译
-                if len(audio_buffer) >= buffer_threshold:
-                    try:
-                        # 3. 调用转译服务（确保服务支持二进制PCM输入）
-                        transcription = await speech_service.transcribe_audio(
-                            audio_buffer,  # 传入二进制数据
-                            speaker_id
-                        )
-
-                        if transcription:
-                            # 4. 异步保存到数据库（使用异步会话）
-                            async_db: AsyncSession = await anext(get_async_db())  # 异步获取会话
-                            transcription_record = TranscriptionCreate(
-                                meeting_id=meeting_id,
-                                speaker_id=speaker_id,
-                                text=transcription,
-                                timestamp = datetime.now(tz)
-                            )
-                            await meeting_service.save_transcription(async_db, transcription_record)
-                            await async_db.commit()  # 异步提交
-
-                            # 5. 广播转译结果
-                            response = {
-                                "type": "transcription",
-                                "meeting_id": meeting_id,
-                                "speaker_id": speaker_id,
-                                "text": transcription,
-                                "timestamp": datetime.utcnow().isoformat() + "Z"  # 带时区标识
-                            }
-                            await manager.broadcast(json.dumps(response), meeting_id)
-
-                        # 清空缓冲区（或保留部分用于连续识别，根据需求调整）
-                        audio_buffer = b""
-
-                    except Exception as e:
-                        # 捕获转译过程中的错误并反馈
-                        error_msg = f"Transcription failed: {str(e)}"
-                        await websocket.send_text(json.dumps({
-                            "type": "error",
-                            "message": error_msg
-                        }))
-                        print(f"转译错误：{error_msg}")  # 输出日志便于排查
-                        audio_buffer = b""  # 出错后清空缓冲区
-
-            elif message_data.get("type") == "text_message":
-                # 文本消息处理（保持原有逻辑，优化数据库调用）
-                speaker_id = message_data.get("speaker_id", "unknown")
-                text = message_data.get("text", "")
-                print("当前文本是", text)
-
-                if text:
-                    try:
-                        async_db: AsyncSession = await anext(get_async_db())
-                        transcription_record = TranscriptionCreate(
-                            meeting_id=meeting_id,
-                            speaker_id=speaker_id,
-                            text=text,
-                            timestamp=datetime.utcnow()
-                        )
-                        await meeting_service.save_transcription(async_db, transcription_record)
-                        await async_db.commit()
-
-                        response = {
-                            "type": "transcription",
-                            "meeting_id": meeting_id,
-                            "speaker_id": speaker_id,
-                            "text": text,
-                            "timestamp": datetime.utcnow().isoformat() + "Z"
-                        }
-                        await manager.broadcast(json.dumps(response), meeting_id)
-                    except Exception as e:
-                        await websocket.send_text(json.dumps({
-                            "type": "error",
-                            "message": f"Failed to save text message: {str(e)}"
-                        }))
-
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, meeting_id)
-    except Exception as e:
-        # 捕获全局异常，避免WebSocket意外关闭
-        print(f"WebSocket意外错误：{str(e)}")
-        await websocket.close(code=1011, reason=f"Server error: {str(e)}")
 
 # Upload audio file for transcription
 @router.post("/{meeting_id}/upload-audio")
@@ -393,7 +288,7 @@ async def upload_audio(
                 meeting_id=meeting_id,
                 speaker_id=speaker_id,
                 text=transcription,
-                timestamp=datetime.utcnow().isoformat() + "Z"
+                timestamp=datetime.now(timezone.utc)
             )
             await meeting_service.save_transcription(db, transcription_record)
 
