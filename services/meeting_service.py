@@ -34,11 +34,18 @@ class MeetingService(object):
         db.flush()
         # Create participants
         for participant_data in meeting_data.participants:
+            # 根据参与者name查询users表，获取对应的user_id（users.id）
+            user = db.query(User).filter(User.name == participant_data.name,
+                                         User.email==participant_data.email).first()
+
+            # 如果未找到对应用户，可根据业务需求处理（此处示例为抛出异常）
+            if not user:
+                raise ValueError(f"User with name '{participant_data.name}' not found in users table")
             participant = Participant(
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
                 name=participant_data.name,
-                user_code=user_id,
+                user_code=user.id,
                 email=participant_data.email,
                 user_role=participant_data.user_role,
                 is_required=participant_data.is_required
