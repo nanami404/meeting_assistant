@@ -264,10 +264,10 @@ class MessageService:
                 page_size = 100
 
             offset = (page - 1) * page_size
+            # 修复 joinedload 链式路径：从 MessageRecipient.message 分别加载 Message.sender 和 Message.recipients
             message_recipients = query.options(
-                joinedload(MessageRecipient.message)
-                    .joinedload(Message.sender)
-                    .joinedload(Message.recipients)
+                joinedload(MessageRecipient.message).joinedload(Message.sender),
+                joinedload(MessageRecipient.message).joinedload(Message.recipients),
             ).order_by(
                 MessageRecipient.created_at.desc()
             ).offset(offset).limit(page_size).all()
@@ -467,10 +467,10 @@ class MessageService:
             
             # 分页查询
             offset = (page - 1) * page_size
+            # 同步修复搜索的加载选项，确保从 MessageRecipient.message 正确加载关联
             messages = query.options(
-                joinedload(MessageRecipient.message)
-                    .joinedload(Message.sender)
-                    .joinedload(Message.recipients)
+                joinedload(MessageRecipient.message).joinedload(Message.sender),
+                joinedload(MessageRecipient.message).joinedload(Message.recipients),
             ).order_by(
                 MessageRecipient.created_at.desc()
             ).offset(offset).limit(page_size).all()
