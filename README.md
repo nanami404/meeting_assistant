@@ -206,13 +206,6 @@ EMAIL_PASSWORD=your_password
 - **实时通信**: WebSocket
 - **容器化**: Docker
 
-## 📖 详细文档
-
-更多详细信息请查看：
-- [完整项目文档](./doc/README.md)
-- [用户管理计划](./doc/USER_MANAGEMENT_MVP_PLAN.md)
-- [API接口说明](http://localhost:8000/docs)
-
 ## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request 来改进项目。
