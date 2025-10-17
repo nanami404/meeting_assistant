@@ -265,43 +265,6 @@ class UserUpdate(BaseModel):
     status: Optional[str] = Field(None, description="用户状态")
 
 
-# ==================== 消息通知相关模型 ====================
-
-class MessageCreate(BaseModel):
-    """发送消息请求模型"""
-    title: str
-    content: str
-    recipient_ids: List[int] = Field(..., min_items=1, description="接收者ID列表，至少包含一个接收者")
-
-class MessageResponse(BaseModel):
-    """消息响应模型"""
-    id: int
-    title: str
-    content: str
-    sender_id: int
-    recipient_ids: List[int] = Field(default_factory=list, description="接收者ID列表")
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-class MarkReadRequest(BaseModel):
-    message_id: int
-
-class DeleteMessageRequest(BaseModel):
-    message_id: int
-
-class DeleteByTypeRequest(BaseModel):
-    type: str  # read | unread | all
-
-    @validator('type')
-    def validate_type(cls, v):
-        v = v.lower().strip()
-        if v not in ['read', 'unread', 'all']:
-            raise ValueError('type 必须为 read、unread 或 all')
-        return v
-
-
 class UserResponse(UserBase):
     """
     用户响应模型
