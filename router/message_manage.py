@@ -71,19 +71,9 @@ async def list_messages(
 ):
     try:
         items, total = await message_service.list_messages(db, current_user.id, page, page_size, is_read)
-        messages = []
-        for m in items:
-            # 获取每条消息的接收者ID列表
-            recipient_ids = [recipient.recipient_id for recipient in m.recipients] if hasattr(m, 'recipients') and m.recipients else []
-            
-            messages.append(MessageResponse(
-                id=m.id,
-                title=m.title,
-                content=m.content,
-                sender_id=m.sender_id,
-                recipient_ids=recipient_ids,
-                created_at=m.created_at,
-            ).dict())
+        # items 为服务层返回的字典列表，已包含 recipient_ids、created_at（ISO 字符串）等字段
+        # 使用 Pydantic 进行类型解析与结构校验
+        messages = [MessageResponse(**m).dict() for m in items]
         total_pages = (total + page_size - 1) // page_size
         result = {
             "messages": messages,

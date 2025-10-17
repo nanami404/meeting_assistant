@@ -41,7 +41,6 @@ class MessageService:
         recipient_ids: List[int],
         title: str,
         content: str,
-        message_type: str = "system"
     ) -> Message:
         """发送消息给多个接收者
         
@@ -51,7 +50,6 @@ class MessageService:
             recipient_ids: 接收者ID列表
             title: 消息标题
             content: 消息内容
-            message_type: 消息类型
             
         Returns:
             Message: 创建的消息对象
@@ -68,13 +66,11 @@ class MessageService:
         
         try:
             # 1. 创建主消息记录
+            # 注意：Message 模型不包含 message_type/is_read 字段，且 created_at 由数据库默认值生成
             msg = Message(
                 sender_id=sender_id,
                 title=title,
                 content=content,
-                message_type=message_type,
-                is_read=False,
-                created_at=datetime.utcnow(),
             )
             db.add(msg)
             db.flush()  # 获取消息ID，但不提交事务
@@ -85,8 +81,7 @@ class MessageService:
                 recipient = MessageRecipient(
                     message_id=msg.id,
                     recipient_id=recipient_id,
-                    is_read=False,
-                    created_at=datetime.utcnow()
+                    is_read=False
                 )
                 message_recipients.append(recipient)
             
@@ -112,6 +107,116 @@ class MessageService:
             logger.error(f"消息发送失败: {e}")
             raise e
 
+    async def mark_read(self, db: Session, user_id: int, message_id: int) -> bool:
+        """标记单条消息为已读（接收者维度）
+        
+        Args:
+            db: 数据库会话
+            user_id: 当前用户ID（接收者）
+            message_id: 消息ID
+        Returns:
+            bool: 是否成功更新
+        """
+        try:
+            updated = db.query(MessageRecipient).filter(
+                and_(
+                    MessageRecipient.recipient_id == user_id,
+                    MessageRecipient.message_id == message_id,
+                    MessageRecipient.is_read == False
+                )
+            ).update({
+                'is_read': True,
+                'read_at': datetime.utcnow()
+            }, synchronize_session=False)
+            db.commit()
+            if updated:
+                await self._clear_user_cache(user_id)
+            return updated > 0
+        except Exception as e:
+            db.rollback()
+            logger.error(f"标记消息已读失败 - 用户:{user_id}, 消息:{message_id}, 错误:{e}")
+            raise e
+
+    async def mark_all_read(self, db: Session, user_id: int) -> int:
+        """全部标记消息为已读（接收者维度）
+        
+        Args:
+            db: 数据库会话
+            user_id: 当前用户ID（接收者）
+        Returns:
+            int: 更新条数
+        """
+        try:
+            updated = db.query(MessageRecipient).filter(
+                and_(
+                    MessageRecipient.recipient_id == user_id,
+                    MessageRecipient.is_read == False
+                )
+            ).update({
+                'is_read': True,
+                'read_at': datetime.utcnow()
+            }, synchronize_session=False)
+            db.commit()
+            if updated:
+                await self._clear_user_cache(user_id)
+            return updated
+        except Exception as e:
+            db.rollback()
+            logger.error(f"全部标记已读失败 - 用户:{user_id}, 错误:{e}")
+            raise e
+
+    async def delete_message(self, db: Session, user_id: int, message_id: int) -> bool:
+        """删除单条消息（接收者维度软删除）
+        
+        Args:
+            db: 数据库会话
+            user_id: 当前用户ID（接收者）
+            message_id: 消息ID
+        Returns:
+            bool: 是否成功删除
+        """
+        try:
+            deleted = db.query(MessageRecipient).filter(
+                and_(
+                    MessageRecipient.recipient_id == user_id,
+                    MessageRecipient.message_id == message_id
+                )
+            ).delete(synchronize_session=False)
+            db.commit()
+            if deleted:
+                await self._clear_user_cache(user_id)
+            return deleted > 0
+        except Exception as e:
+            db.rollback()
+            logger.error(f"删除消息失败 - 用户:{user_id}, 消息:{message_id}, 错误:{e}")
+            raise e
+
+    async def delete_by_type(self, db: Session, user_id: int, type_: str) -> int:
+        """按类型批量删除（read/unread/all），接收者维度
+        
+        Args:
+            db: 数据库会话
+            user_id: 当前用户ID（接收者）
+            type_: 删除类型（read/unread/all）
+        Returns:
+            int: 删除条数
+        """
+        try:
+            q = db.query(MessageRecipient).filter(MessageRecipient.recipient_id == user_id)
+            if type_ == 'read':
+                q = q.filter(MessageRecipient.is_read == True)
+            elif type_ == 'unread':
+                q = q.filter(MessageRecipient.is_read == False)
+            deleted = q.delete(synchronize_session=False)
+            db.commit()
+            if deleted:
+                await self._clear_user_cache(user_id)
+            return deleted
+        except Exception as e:
+            db.rollback()
+            logger.error(f"按类型批量删除失败 - 用户:{user_id}, 类型:{type_}, 错误:{e}")
+            raise e
+
     async def list_messages(
         self,
         db: Session,
@@ -119,9 +224,12 @@ class MessageService:
         page: int = 1,
         page_size: int = 20,
         is_read: Optional[bool] = None,
-        message_type: Optional[str] = None
     ) -> Tuple[List[dict], int]:
         """查询用户消息列表
+        
+        说明：
+        - 按接收者维度筛选未读/已读（MessageRecipient.is_read），不使用 Message 表中的历史 is_read 字段
+        - 返回字典包含该消息的所有接收者 ID 列表，便于 REST 接口与前端展示
         
         Args:
             db: 数据库会话
@@ -129,7 +237,6 @@ class MessageService:
             page: 页码
             page_size: 每页大小
             is_read: 是否已读筛选
-            message_type: 消息类型过滤
             
         Returns:
             Tuple[List[dict], int]: 消息字典列表和总数
@@ -143,8 +250,7 @@ class MessageService:
             # 添加过滤条件
             if is_read is not None:
                 query = query.filter(MessageRecipient.is_read == is_read)
-            if message_type:
-                query = query.filter(Message.message_type == message_type)
+            # Message 模型不包含消息类型字段，此处不进行类型过滤
 
             # 获取总数
             total = query.count()
@@ -159,7 +265,9 @@ class MessageService:
 
             offset = (page - 1) * page_size
             message_recipients = query.options(
-                joinedload(MessageRecipient.message).joinedload(Message.sender)
+                joinedload(MessageRecipient.message)
+                    .joinedload(Message.sender)
+                    .joinedload(Message.recipients)
             ).order_by(
                 MessageRecipient.created_at.desc()
             ).offset(offset).limit(page_size).all()
@@ -173,12 +281,12 @@ class MessageService:
                     'title': msg.title,
                     'content': msg.content,
                     'sender_id': msg.sender_id,
-                    'message_type': msg.message_type,
                     'is_read': mr.is_read,
                     'created_at': msg.created_at.isoformat() if msg.created_at else None,
                     'sender_name': msg.sender.user_name if msg.sender else None,
                     'sender_email': msg.sender.email if msg.sender else None,
-                    'recipient_read_at': mr.read_at.isoformat() if mr.read_at else None
+                    'recipient_read_at': mr.read_at.isoformat() if mr.read_at else None,
+                    'recipient_ids': [r.recipient_id for r in (msg.recipients or [])]
                 }
                 messages_data.append(msg_dict)
 
@@ -319,7 +427,6 @@ class MessageService:
         db: Session,
         user_id: int,
         keyword: str,
-        message_type: Optional[str] = None,
         is_read: Optional[bool] = None,
         page: int = 1,
         page_size: int = 20
@@ -330,7 +437,6 @@ class MessageService:
             db: 数据库会话
             user_id: 用户ID
             keyword: 搜索关键词
-            message_type: 消息类型过滤
             is_read: 是否已读过滤
             page: 页码
             page_size: 每页大小
@@ -352,9 +458,7 @@ class MessageService:
                 )
                 query = query.filter(search_filter)
             
-            # 添加其他过滤条件
-            if message_type:
-                query = query.filter(Message.message_type == message_type)
+            # 添加其他过滤条件（仅接收者维度的已读状态）
             if is_read is not None:
                 query = query.filter(MessageRecipient.is_read == is_read)
             
@@ -364,7 +468,9 @@ class MessageService:
             # 分页查询
             offset = (page - 1) * page_size
             messages = query.options(
-                joinedload(MessageRecipient.message).joinedload(Message.sender)
+                joinedload(MessageRecipient.message)
+                    .joinedload(Message.sender)
+                    .joinedload(Message.recipients)
             ).order_by(
                 MessageRecipient.created_at.desc()
             ).offset(offset).limit(page_size).all()
@@ -378,12 +484,12 @@ class MessageService:
                     'title': msg.title,
                     'content': msg.content,
                     'sender_id': msg.sender_id,
-                    'message_type': msg.message_type,
                     'is_read': mr.is_read,
                     'created_at': msg.created_at.isoformat() if msg.created_at else None,
                     'sender_name': msg.sender.user_name if msg.sender else None,
                     'sender_email': msg.sender.email if msg.sender else None,
-                    'recipient_read_at': mr.read_at.isoformat() if mr.read_at else None
+                    'recipient_read_at': mr.read_at.isoformat() if mr.read_at else None,
+                    'recipient_ids': [r.recipient_id for r in (msg.recipients or [])]
                 }
                 messages_data.append(msg_dict)
             
