@@ -59,7 +59,7 @@ async def root()->dict[str, str]:
 
 # Meeting management endpoints
 @router.post("/", response_model=MeetingResponse)
-async def create_meeting(meeting: MeetingCreate, db: Session = Depends(get_db)) ->MeetingResponse:
+async def create_meeting(meeting: MeetingCreate, user_id: str, db: Session = Depends(get_db)) ->MeetingResponse:
     """创建新会议
     Args:
         meeting (MeetingCreate): 会议创建数据，已通过Pydantic验证
@@ -75,7 +75,7 @@ async def create_meeting(meeting: MeetingCreate, db: Session = Depends(get_db)) 
         db.begin()
 
         # 创建会议记录
-        new_meeting = await meeting_service.create_meeting(db, meeting)
+        new_meeting = await meeting_service.create_meeting(db, meeting,user_id)
 
         # 提交事务
         db.commit()
