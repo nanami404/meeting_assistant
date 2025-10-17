@@ -568,7 +568,6 @@ class MessageService:
                 'title': message.title,
                 'content': message.content,
                 'sender_id': message.sender_id,
-                'message_type': message.message_type,
                 'created_at': message.created_at.isoformat() if message.created_at else None
             }
             
