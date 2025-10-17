@@ -11,7 +11,8 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    func
+    func,
+    UniqueConstraint
 )
 
 from sqlalchemy import (
@@ -178,10 +179,18 @@ class Message(Base):
     content = Column(Text, nullable=False, comment="消息内容")
 
     # 关联用户
-    sender_id = Column(BigInteger, nullable=False, comment="发送者ID")
+    # 注意：将 sender_id 显式声明为外键，以便 SQLAlchemy 正确建立 Message.sender 关系
+    sender_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, comment="发送者ID")
+
+    # 发送者关系 - 关联到 User 模型
+    # 说明：为便于在查询中使用 joinedload(Message.sender) 以及在业务代码中访问 msg.sender.user_name
+    # 定义从 Message 到 User 的多对一关系。
+    sender = relationship("User", foreign_keys=[sender_id], lazy="joined")
 
     # 时间戳
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间")
+    # 说明：与数据库 DDL 保持一致，使用 CURRENT_TIMESTAMP 语义
+    created_at = Column(DateTime(timezone=True), default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), comment="更新时间")
 
     # 关联关系 - 与MessageRecipient的一对多关系
     recipients = relationship("MessageRecipient", back_populates="message", cascade="all, delete-orphan")
@@ -213,10 +222,18 @@ class MessageRecipient(Base):
     read_at = Column(DateTime(timezone=True), nullable=True, comment="阅读时间（可选）")
 
     # 时间戳字段
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间（关联时间）")
+    created_at = Column(DateTime(timezone=True), default=func.now(), comment="创建时间（关联时间）")
 
     # 关联关系 - 与Message的多对一关系
     message = relationship("Message", back_populates="recipients")
+
+    # 约束与索引 - 与数据库DDL保持一致
+    __table_args__ = (
+        UniqueConstraint('message_id', 'recipient_id', name='uk_message_recipient'),
+        Index('idx_message_recipients_recipient_id', 'recipient_id'),
+        Index('idx_message_recipients_is_read', 'is_read'),
+        Index('idx_message_recipients_message_id', 'message_id'),
+    )
 
     # 索引设计 - 优化查询性能
     __table_args__ = (

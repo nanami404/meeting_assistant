@@ -2,7 +2,7 @@ name: 部署会议助手到 Ubuntu 24.04
 
 on:
   push:
-    branches: [ main ]  # 只在推送到 main 分支时触发
+    branches: [ main, develop ]  # 在推送到 main 或 develop 分支时触发
   workflow_dispatch: {}  # 支持手动触发部署
 
 jobs:
@@ -22,10 +22,17 @@ jobs:
           port: 22
           script_stop: true
           script: |
+            BRANCH="${{ github.ref_name }}"
+            echo "🚩 当前触发分支: $BRANCH"
             cd /var/www/meeting_assistant || exit 1
 
-            echo "🔄 正在从 GitHub 拉取最新代码..."
-            git pull origin main
+            echo "🔄 正在从 GitHub 拉取最新代码（分支：$BRANCH）..."
+            # 拉取远程最新提交（清理已删除的远程分支引用）
+            git fetch --prune origin "$BRANCH"
+            # 切换到分支（不存在则从远程创建），避免非零退出导致脚本中断
+            git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH"
+            # 强制将本地分支同步到远程分支，处理远程强制推送等情况
+            git reset --hard "origin/$BRANCH"
 
             echo "📦 正在安装/更新 Python 依赖..."
             if [ ! -d "/var/www/meeting_assistant/venv" ]; then
