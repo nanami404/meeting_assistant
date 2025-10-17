@@ -129,7 +129,7 @@ async def profile(current_user: User = Depends(require_auth)):
             phone=current_user.phone,
             email=current_user.email,
             company=current_user.company,
-            role=current_user.user_role,
+            user_role=current_user.user_role,
             status=current_user.status,
             created_at=current_user.created_at,
             updated_at=current_user.updated_at,
@@ -237,7 +237,7 @@ async def create_user(
             phone=user.phone,
             email=user.email,
             company=user.company,
-            role=user.user_role,
+            user_role=user.user_role,
             status=user.status,
             created_at=user.created_at,
             updated_at=user.updated_at,
@@ -271,7 +271,7 @@ async def register_user(
             _raise(status.HTTP_422_UNPROCESSABLE_ENTITY, "注册需提供有效密码", "validation_error")
 
         # 强制角色为一般用户
-        payload.role = UserRole.USER.value
+        payload.user_role = UserRole.USER.value
 
         # 创建用户（匿名：creator=None）
         user = await user_service.create_user(db, payload, created_by=None)
@@ -285,7 +285,7 @@ async def register_user(
             phone=user.phone,
             email=user.email,
             company=user.company,
-            role=user.user_role,
+            user_role=user.user_role,
             status=user.status,
             created_at=user.created_at,
             updated_at=user.updated_at,
@@ -309,7 +309,7 @@ async def list_users(
     current_user: User = Depends(require_admin),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
-    role: Optional[str] = Query(None, description="角色过滤"),
+    user_role: Optional[str] = Query(None, description="角色过滤"),
     status_: Optional[str] = Query(None, alias="status", description="状态过滤"),
     keyword: Optional[str] = Query(None, description="通用关键词模糊匹配（姓名、账号、邮箱、单位、4A账号）"),
     name_keyword: Optional[str] = Query(None, description="姓名模糊匹配"),
@@ -325,7 +325,7 @@ async def list_users(
             db=db,
             page=page,
             page_size=page_size,
-            role=role,
+            user_role=user_role,
             status=status_,
             keyword=keyword,
             name_keyword=name_keyword,
@@ -345,7 +345,7 @@ async def list_users(
                 gender=u.gender,
                 phone=u.phone,
                 company=u.company,
-                role=u.user_role,
+                user_role=u.user_role,
                 status=u.status,
                 created_at=u.created_at,
                 updated_at=u.updated_at,
@@ -377,7 +377,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db), current_user: Us
             gender=user.gender,
             phone=user.phone,
             company=user.company,
-            role=user.user_role,
+            user_role=user.user_role,
             status=user.status,
             created_at=user.created_at,
             updated_at=user.updated_at,
@@ -407,7 +407,7 @@ async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(g
             gender=user.gender,
             phone=user.phone,
             company=user.company,
-            role=user.user_role,
+            user_role=user.user_role,
             status=user.status,
             created_at=user.created_at,
             updated_at=user.updated_at,

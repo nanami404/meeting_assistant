@@ -44,7 +44,7 @@ class UserService(object):
                 phone=user_data.phone,
                 email=user_data.email,
                 company=user_data.company,
-                user_role=user_data.role or UserRole.USER.value,
+                user_role=user_data.user_role or UserRole.USER.value,
                 status=user_data.status or UserStatus.ACTIVE.value,
                 password_hash=hashed,
                 created_by=created_by
@@ -139,7 +139,7 @@ class UserService(object):
         db: Session,
         page: int = 1,
         page_size: int = 20,
-        role: Optional[str] = None,
+        user_role: Optional[str] = None,
         status: Optional[str] = None,
         keyword: Optional[str] = None,
         name_keyword: Optional[str] = None,
@@ -155,8 +155,8 @@ class UserService(object):
         try:
             query = db.query(User)
 
-            if role:
-                query = query.filter(User.user_role == role)
+            if user_role:
+                query = query.filter(User.user_role == user_role)
             if status:
                 query = query.filter(User.status == status)
             
@@ -296,8 +296,8 @@ class UserService(object):
             for field in ["name", "user_name", "gender", "phone", "email", "company", "status"]:
                 if field in provided:
                     setattr(user, field, provided.get(field))
-            if "role" in provided:
-                user.user_role = provided.get("role")
+            if "user_role" in provided:
+                user.user_role = provided.get("user_role")
 
             # 审计字段
             if updated_by:

@@ -7,7 +7,7 @@ import re
 class ParticipantBase(BaseModel):
     name: str
     email: EmailStr
-    role: str = "participant"
+    user_role: str = "participant"
     is_required: bool = True
 
 
@@ -152,7 +152,7 @@ class UserBase(BaseModel):
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
-    role: str = Field(default="user", description="用户角色")
+    user_role: str = Field(default="user", description="用户角色")
     status: str = Field(default="active", description="用户状态")
 
     @validator('gender')
@@ -170,7 +170,7 @@ class UserBase(BaseModel):
                 raise ValueError('手机号格式不正确')
         return v
 
-    @validator('role')
+    @validator('user_role')
     def validate_role(cls, v):
         if v not in ['admin', 'user']:
             raise ValueError('用户角色必须为admin或user')
@@ -261,7 +261,7 @@ class UserUpdate(BaseModel):
     gender: Optional[str] = Field(None, description="性别")
     phone: Optional[str] = Field(None, description="手机号码")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
-    role: Optional[str] = Field(None, description="用户角色")
+    user_role: Optional[str] = Field(None, description="用户角色")
     status: Optional[str] = Field(None, description="用户状态")
 
 
