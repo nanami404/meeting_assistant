@@ -1,4 +1,7 @@
 # 标准库
+from fastapi.routing import APIRouter
+
+
 from typing import Dict, Any
 
 # 第三方库
@@ -6,10 +9,10 @@ from fastapi import APIRouter, HTTPException
 from loguru import logger
 
 # 创建路由器
-router = APIRouter(prefix="/api/v1/health", tags=["健康检查"])
+router: APIRouter = APIRouter(prefix="/api/v1/health", tags=["健康检查"])
 
 
-@router.get("/", summary="系统健康检查", description="检查系统各组件的健康状态")
+@router.get(path="/", summary="系统健康检查", description="检查系统各组件的健康状态")
 async def system_health_check() -> Dict[str, Any]:
     """系统整体健康检查
     
@@ -22,7 +25,7 @@ async def system_health_check() -> Dict[str, Any]:
     """
     try:
         # 构建系统健康状态响应
-        health_status = {
+        health_status: dict[str, Any] = {
             "status": "healthy",
             "timestamp": None,  # 将由FastAPI自动添加时间戳
             "version": "1.0.0",
@@ -53,7 +56,7 @@ async def system_health_check() -> Dict[str, Any]:
         )
 
 
-@router.get("/ping", summary="简单健康检查", description="最简单的健康检查端点")
+@router.get(path="/ping", summary="简单健康检查", description="最简单的健康检查端点")
 async def ping() -> Dict[str, str]:
     """简单的ping检查
     
