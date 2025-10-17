@@ -178,7 +178,13 @@ class Message(Base):
     content = Column(Text, nullable=False, comment="消息内容")
 
     # 关联用户
-    sender_id = Column(BigInteger, nullable=False, comment="发送者ID")
+    # 注意：将 sender_id 显式声明为外键，以便 SQLAlchemy 正确建立 Message.sender 关系
+    sender_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, comment="发送者ID")
+
+    # 发送者关系 - 关联到 User 模型
+    # 说明：为便于在查询中使用 joinedload(Message.sender) 以及在业务代码中访问 msg.sender.user_name
+    # 定义从 Message 到 User 的多对一关系。
+    sender = relationship("User", foreign_keys=[sender_id], lazy="joined")
 
     # 时间戳
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间")

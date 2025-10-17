@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -132,6 +133,8 @@ logger.configure(handlers=handlers)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount tests directory for test files
+app.mount("/tests", StaticFiles(directory="tests"), name="tests")
 
 manager = ConnectionManager()
 app.include_router(router.user_manage)
@@ -139,12 +142,22 @@ app.include_router(router.meeting_manage)
 app.include_router(router.attendance_manage)
 app.include_router(router.message_manage)
 
+# WebSocket 路由
+from router.websocket_message import router as websocket_message_router
+app.include_router(websocket_message_router)
+
 
 
 
 # 添加健康检查路由
 from router.health_check import router as health_router
 app.include_router(health_router)
+
+# 添加WebSocket测试页面路由
+@app.get("/test_websocket.html")
+async def get_websocket_test():
+    """返回WebSocket测试页面"""
+    return FileResponse("tests/test_websocket.html")
 
 if __name__ == "__main__":
     import uvicorn
