@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 import os
 from urllib.parse import quote_plus
-from typing import AsyncGenerator, Generator, AsyncContextManager
+from typing import Generator, AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    create_async_engine,
+    async_sessionmaker,  # 👈 关键：使用 async_sessionmaker
+)
 from sqlalchemy.orm import sessionmaker, Session
 
 from dotenv import load_dotenv
@@ -43,7 +47,7 @@ class DatabaseSessionManager:
     def __init__(self, config: DatabaseConfig):
         self.config = config
 
-        # 初始化同步引擎与会话工厂
+        # ========== 同步引擎与会话工厂 ==========
         self.sync_engine = create_engine(
             self.config.sync_url,
             echo=True,  # 开发环境打印SQL日志，生产环境设为False
@@ -55,18 +59,17 @@ class DatabaseSessionManager:
             autoflush=False
         )
 
-        # 初始化异步引擎与会话工厂
+        # ========== 异步引擎与会话工厂（使用 async_sessionmaker）==========
         self.async_engine = create_async_engine(
             self.config.async_url,
-            echo=True,  # 开发环境打印SQL日志
+            echo=True,
             pool_size=30,
             max_overflow=20,
             pool_recycle=3600,
             pool_pre_ping=True
         )
-        self.async_session_factory = sessionmaker(
+        self.async_session_factory = async_sessionmaker(
             bind=self.async_engine,
-            class_=AsyncSession,
             autocommit=False,
             autoflush=False,
             expire_on_commit=True
@@ -83,27 +86,19 @@ class DatabaseSessionManager:
 
     # ------------------------------ 异步会话管理 ------------------------------
     @asynccontextmanager
-    async def safe_async_session(self) -> AsyncContextManager[AsyncSession]:
+    async def safe_async_session(self) -> AsyncIterator[AsyncSession]:
         """安全的异步会话上下文管理器，自动处理提交/回滚/关闭"""
-        session = self.async_session_factory()
+        session: AsyncSession = self.async_session_factory()
         try:
             yield session
             await session.commit()
-        except Exception as e:
+        except Exception:
             await session.rollback()
-            raise e
+            raise
         finally:
-            # 确保会话正确关闭，处理可能的事务残留
-            if not session.in_transaction():
-                await session.close()
-            else:
-                try:
-                    await session.rollback()
-                    await session.close()
-                except Exception:
-                    pass
+            await session.close()
 
-    async def get_async_session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def get_async_session(self) -> AsyncIterator[AsyncSession]:
         """异步会话依赖注入生成器（用于异步路由）"""
         async with self.safe_async_session() as session:
             yield session
@@ -114,5 +109,5 @@ db_config = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
 
 # 对外暴露的依赖注入函数（与FastAPI路由配合使用）
-get_db = db_manager.get_sync_session  # 同步会话依赖
+get_db = db_manager.get_sync_session      # 同步会话依赖
 get_async_db = db_manager.get_async_session  # 异步会话依赖
