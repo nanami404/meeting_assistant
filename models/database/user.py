@@ -11,10 +11,7 @@ from sqlalchemy import (
     Index
 )
 from sqlalchemy import (
-    BigInteger,
-    Text,
-    Integer,
-    Boolean
+    BigInteger
 )
 from sqlalchemy.orm import relationship
 
@@ -34,7 +31,8 @@ class User(Base):
     # 基本信息字段
     name = Column(String(100), nullable=False, comment="用户姓名")
     user_name = Column(String(50), nullable=False, unique=True, comment="用户账号")
-    gender = Column(String(20), nullable=True, comment="性别：male-男性，female-女性，other-其他")
+    gender = Column(String(20), nullable=True,default=GenderType.OTHER.value, 
+    comment="性别：male-男性，female-女性，other-其他")
     phone = Column(String(20), nullable=True, unique=True, comment="手机号码")
     email = Column(String(255), nullable=True, unique=True, comment="邮箱地址")
     company = Column(String(200), nullable=True, comment="所属单位名称")
@@ -52,9 +50,9 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="更新时间")
 
-    # 关联字段
-    created_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
-    updated_by = Column(String(50), ForeignKey("users.id"), nullable=True, comment="更新者用户ID")
+   # 关联字段
+    created_by = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
+    updated_by = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="更新者用户ID")
 
     # 关联关系
     created_meetings = relationship("Meeting", foreign_keys="Meeting.created_by", back_populates="creator")
@@ -62,8 +60,8 @@ class User(Base):
     participations = relationship("Participant", foreign_keys="Participant.user_code", back_populates="user")
 
     # 自引用关系
-    creator_user = relationship("User", foreign_keys=[created_by], remote_side=[id])
-    updater_user = relationship("User", foreign_keys=[updated_by], remote_side=[id])
+    creator_user = relationship("User", foreign_keys=created_by, remote_side=[id])
+    updater_user = relationship("User", foreign_keys=updated_by, remote_side=[id])
 
     # 添加索引
     __table_args__ = (
@@ -71,3 +69,6 @@ class User(Base):
         Index('idx_users_role', 'user_role'),
         Index('idx_users_status', 'status')
     )
+
+    def __repr__(self):
+        return f"<User(id={self.id}, name='{self.name}', user_name='{self.user_name}')>"

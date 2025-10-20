@@ -11,7 +11,6 @@ from models.schemas.meeting import (
 from models.schemas.transcription import (
     TranscriptionBase, TranscriptionCreate, TranscriptionResponse
 )
-from models.schemas.message import WebSocketMessage
 
 # 为了保持兼容性，重新导出所有类
 __all__ = [
@@ -25,8 +24,6 @@ __all__ = [
     'PersonSignCreate', 'PersonSignResponse',
     
     # 转录相关模型
-    'TranscriptionBase', 'TranscriptionCreate', 'TranscriptionResponse',
+    'TranscriptionBase', 'TranscriptionCreate', 'TranscriptionResponse'
     
-    # 消息相关模型
-    'WebSocketMessage'
 ]

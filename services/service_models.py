@@ -2,7 +2,6 @@
 from models.database.enums import UserRole, UserStatus, GenderType
 from models.database.user import User
 from models.database.meeting import Meeting, Participant, Transcription, PersonSign
-from models.database.message import Message, MessageRecipient
 
 # 保持原有的导入，以确保其他模块的兼容性
 from db.databases import Base
@@ -12,6 +11,5 @@ __all__ = [
     'UserRole', 'UserStatus', 'GenderType',
     'User', 'PersonSign',
     'Meeting', 'Participant', 'Transcription',
-    'Message', 'MessageRecipient',
     'Base'
 ]

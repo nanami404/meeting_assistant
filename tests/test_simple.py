@@ -27,9 +27,6 @@ def test_basic_imports():
         from models.database.meeting import Meeting, Participant, Transcription
         print("✓ 数据库会议模型导入成功")
         
-        from models.database.message import Message, MessageRecipient
-        print("✓ 数据库消息模型导入成功")
-        
         # 测试Schema导入
         from models.schemas.user import UserBase, UserCreate
         print("✓ 用户Schema导入成功")
@@ -39,9 +36,6 @@ def test_basic_imports():
         
         from models.schemas.transcription import TranscriptionBase
         print("✓ 转录Schema导入成功")
-        
-        from models.schemas.message import WebSocketMessage
-        print("✓ 消息Schema导入成功")
         
         # 测试向后兼容性
         from services.service_models import User as ServiceUser

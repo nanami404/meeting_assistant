@@ -64,19 +64,6 @@ def test_imports():
     except Exception as e:
         print(f"✗ 数据库会议模型导入失败: {e}")
     
-    # 测试4: 数据库消息模型导入
-    total_tests += 1
-    try:
-        from models.database.message import Message, MessageRecipient
-        print("✓ 数据库消息模型导入成功")
-        # 验证模型属性
-        assert hasattr(Message, '__tablename__')
-        assert hasattr(MessageRecipient, '__tablename__')
-        print("  ✓ 消息模型结构验证通过")
-        success_count += 1
-    except Exception as e:
-        print(f"✗ 数据库消息模型导入失败: {e}")
-    
     # 测试5: 用户Schema导入
     total_tests += 1
     try:
