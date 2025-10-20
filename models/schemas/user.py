@@ -1,6 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
+# 导入数据库枚举
+from models.database.enums import GenderType, UserRole, UserStatus
 import re
 
 
@@ -8,51 +10,50 @@ class UserBase(BaseModel):
     """
     用户基础模型
     
-    包含用户的基本信息字段，用作其他用户相关模型的基类。
+    包含用户的基本信息字段,用作其他用户相关模型的基类。
     
     Attributes:
-        name: 用户姓名，必填，最大长度100字符
-        email: 邮箱地址，可选，自动验证邮箱格式
-        gender: 性别，可选，限制为male/female/other
-        phone: 手机号码，可选，验证中国大陆手机号格式
-        id_number: 证件号码/工号，可选，最大长度18字符
-        company: 所属公司/单位，可选，最大长度200字符
-        role: 用户角色，默认为user，限制为admin/user
-        status: 用户状态，默认为active，限制为active/inactive/suspended
+        name: 用户姓名,必填,最大长度100字符
+        email: 邮箱地址,可选,自动验证邮箱格式
+        gender: 性别,可选,限制为male/female/other
+        phone: 手机号码,可选,验证中国大陆手机号格式
+        company: 所属公司/单位,可选,最大长度200字符
+        user_role: 用户角色,默认为user,限制为admin/user
+        status: 用户状态,默认为active,限制为active/inactive/suspended
     """
     name: str = Field(..., min_length=1, max_length=100, description="用户姓名")
-    email: Optional[EmailStr] = Field(None, description="邮箱地址")
+    email: Optional[EmailStr] = Field(None, max_length=255, description="邮箱地址")
     gender: Optional[str] = Field(None, description="性别")
-    phone: Optional[str] = Field(None, description="手机号码")
+    phone: Optional[str] = Field(None, max_length=20, description="手机号码")
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
     user_role: str = Field(default="user", description="用户角色")
     status: str = Field(default="active", description="用户状态")
 
-    @validator('gender')
+    @field_validator('gender')
     def validate_gender(cls, v):
-        if v is not None and v not in ['male', 'female', 'other']:
-            raise ValueError('性别必须为male、female或other')
+        if v is not None and v not in GenderType.__members__:
+            raise ValueError(f'性别必须为{",".join(GenderType.__members__.keys())}')
         return v
 
-    @validator('phone')
+    @field_validator('phone')
     def validate_phone(cls, v):
         if v is not None:
-            # 中国大陆手机号验证
+            # 手机号验证
             pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
             if not re.match(pattern, v):
                 raise ValueError('手机号格式不正确')
         return v
 
-    @validator('user_role')
+    @field_validator('user_role')
     def validate_role(cls, v):
-        if v not in ['admin', 'user']:
-            raise ValueError('用户角色必须为admin或user')
+        if v not in UserRole.__members__:
+            raise ValueError(f'用户角色必须为{",".join(UserRole.__members__.keys())}')
         return v
 
-    @validator('status')
+    @field_validator('status')
     def validate_status(cls, v):
-        if v not in ['active', 'inactive', 'suspended']:
-            raise ValueError('用户状态必须为active、inactive或suspended')
+        if v not in UserStatus.__members__:
+            raise ValueError(f'用户状态必须为{",".join(UserStatus.__members__.keys())}')
         return v
 
 
@@ -64,20 +65,19 @@ class UserCreate(UserBase):
     包含密码字段并进行强度验证。
     
     Attributes:
-        user_name: 用户账号，必填
-        role: 角色，选填，默认 user（admin/user）
-        email: 邮箱，选填
-        password: 用户密码，选填；未提供时使用默认值 Test@1234
+        user_name: 用户账号,必填,长度3-50字符,仅支持字母、数字、下划线和中划线
+        email: 邮箱,选填
+        password: 用户密码,选填；未提供时使用默认值 Test@1234
     """
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
     # 覆盖父类字段以满足创建用户必填/选填要求
-    email: Optional[EmailStr] = Field(None, description="邮箱地址")
+    email: Optional[EmailStr] = Field(None, max_length=255, description="邮箱地址")
     password: Optional[str] = Field(None, min_length=8, max_length=128, description="用户密码")
 
-    @validator('user_name')
+    @field_validator('user_name')
     def validate_user_name(cls, v):
         """
-        验证用户账号格式：字母、数字、下划线、中划线，长度 3-50
+        验证用户账号格式：字母、数字、下划线、中划线,长度 3-50
         """
         v = v.strip()
         if len(v) < 3 or len(v) > 50:
@@ -86,7 +86,7 @@ class UserCreate(UserBase):
             raise ValueError('用户名仅支持字母、数字、下划线和中划线')
         return v
 
-    @validator('password')
+    @field_validator('password')
     def validate_password(cls, v):
         """
         密码强度验证：
@@ -115,27 +115,26 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     """
     更新用户请求模型
-    
-    用于更新用户信息的请求，姓名(name)与账号(user_name)为必填，其他字段可选。
-    不包含密码字段，密码更新需要单独的接口。
+    用于更新用户信息的请求,姓名(name)与账号(user_name)为必填,其他字段可选。
+    不包含密码字段,密码更新需要单独的接口。
     
     Attributes:
-        name: 用户姓名，必填
-        user_name: 用户账号，必填
-        gender: 性别，可选
-        phone: 手机号码，可选
-        company: 所属公司/单位，可选
-        role: 用户角色，可选（仅管理员可修改）
-        status: 用户状态，可选（仅管理员可修改）
+        name: 用户姓名,必填
+        user_name: 用户账号,必填
+        gender: 性别,可选,限制为male/female/other
+        phone: 手机号码,可选
+        company: 所属公司/单位,可选
+        user_role: 用户角色,可选（仅管理员可修改）,限制为admin/user
+        status: 用户状态,可选（仅管理员可修改）,限制为active/inactive/suspended 
     """
     name: str = Field(..., min_length=1, max_length=100, description="用户姓名")
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
-    email: Optional[EmailStr] = Field(None, description="邮箱地址")
-    gender: Optional[str] = Field(None, description="性别")
-    phone: Optional[str] = Field(None, description="手机号码")
+    email: Optional[EmailStr] = Field(None, max_length=255, description="邮箱地址")
+    gender: Optional[str] = Field(None, description="性别,限制为male/female/other") 
+    phone: Optional[str] = Field(None, max_length=20, description="手机号码")   
     company: Optional[str] = Field(None, max_length=200, description="所属公司/单位")
-    user_role: Optional[str] = Field(None, description="用户角色")
-    status: Optional[str] = Field(None, description="用户状态")
+    user_role: Optional[str] = Field(None, description="用户角色,限制为admin/user")
+    status: Optional[str] = Field(None, description="用户状态,限制为active/inactive/suspended") 
 
 
 class UserResponse(UserBase):
@@ -149,11 +148,11 @@ class UserResponse(UserBase):
         id: 用户唯一标识
         created_at: 创建时间
         updated_at: 更新时间
-        created_by: 创建者用户ID，可选
-        updated_by: 更新者用户ID，可选
+        created_by: 创建者用户ID,可选
+        updated_by: 更新者用户ID,可选
     """
-    user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
     id: int = Field(..., description="用户唯一标识")
+    user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     created_by: Optional[int] = Field(None, description="创建者用户ID")
@@ -167,8 +166,8 @@ class UserBasicResponse(BaseModel):
     """
     用户基础信息响应模型
     
-    用于公共接口返回用户基础信息，主要用于业务场景如创建会议时选择指定用户。
-    仅包含必要的基础字段，不包含敏感信息。
+    用于公共接口返回用户基础信息,主要用于业务场景如创建会议时选择指定用户。
+    仅包含必要的基础字段,不包含敏感信息。
     
     Attributes:
         id: 用户唯一标识
@@ -197,13 +196,13 @@ class UserLogin(BaseModel):
     支持用户名、邮箱或手机号登录。
     
     Attributes:
-        username: 用户名（用户名、邮箱或手机号），必填
-        password: 密码，必填
+        username: 用户名（用户名、邮箱或手机号）,必填
+        password: 密码,必填
     """
     username: str = Field(..., min_length=1, max_length=255, description="用户名（用户名、邮箱或手机号）")
     password: str = Field(..., min_length=1, max_length=128, description="密码")
 
-    @validator('username')
+    @field_validator('username')
     def validate_username(cls, v):
         """
         验证用户名格式：支持用户名、邮箱或手机号
@@ -224,6 +223,6 @@ class UserLogin(BaseModel):
         
         # 支持三种格式：邮箱、手机号、用户名
         if not (re.match(email_pattern, v) or re.match(phone_pattern, v) or re.match(username_pattern, v)):
-            raise ValueError('用户名格式不正确，支持用户名（字母数字下划线）、邮箱地址或手机号码')
+            raise ValueError('用户名格式不正确,支持用户名（字母数字下划线）、邮箱地址或手机号码')
         
         return v

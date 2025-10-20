@@ -17,7 +17,7 @@ from sqlalchemy.orm import relationship
 
 # 自定义库
 from db.databases import Base
-from models.database.enums import UserRole, UserStatus, GenderType
+from models.database.enums import UserRole, UserStatus
 
 shanghai_tz = pytz.timezone('Asia/Shanghai')
 
@@ -31,8 +31,7 @@ class User(Base):
     # 基本信息字段
     name = Column(String(100), nullable=False, comment="用户姓名")
     user_name = Column(String(50), nullable=False, unique=True, comment="用户账号")
-    gender = Column(String(20), nullable=True,default=GenderType.OTHER.value, 
-    comment="性别：male-男性，female-女性，other-其他")
+    gender = Column(String(20), nullable=True, comment="性别：male-男性，female-女性，other-其他")
     phone = Column(String(20), nullable=True, unique=True, comment="手机号码")
     email = Column(String(255), nullable=True, unique=True, comment="邮箱地址")
     company = Column(String(200), nullable=True, comment="所属单位名称")
