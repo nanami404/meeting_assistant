@@ -5,23 +5,22 @@ import ssl
 from loguru import logger
 from pathlib import Path
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
-#第三方库
+# 第三方库
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 
 # 自定义类
 from db.databases import DatabaseConfig, DatabaseSessionManager
-from db.conn_manager import  ConnectionManager
+from db.conn_manager import ConnectionManager
 from services.meeting_service import MeetingService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
-from services.redis_service import init_redis_service, cleanup_redis_service
 import router
 from router import user_manage as user_router
 
@@ -29,8 +28,7 @@ from router import user_manage as user_router
 db_config = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
 get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session  #
-
+get_async_db = db_manager.get_async_session
 
 # Services
 meeting_service = MeetingService()
@@ -42,58 +40,50 @@ load_dotenv()
 
 Base = declarative_base()
 engine = create_engine(
-   db_config.sync_url,
-    # Set to False in production
-    echo=True
+    db_config.sync_url,
+    echo=True  # Set to False in production
 )
 # Create database tables
 Base.metadata.create_all(bind=engine)
-app = FastAPI(title="Meeting Assistant API", version="1.0.0")
 
-# 应用生命周期事件处理
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时的初始化操作"""
+
+# ✅ 新增：Lifespan 事件处理器
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理：启动和关闭事件"""
+    # ===== 启动逻辑 =====
     logger.info("Meeting Assistant API 正在启动...")
-    
-    # 初始化Redis服务
-    await init_redis_service()
-    
+    # 可在此处添加初始化逻辑，如连接池预热、缓存加载等
     logger.success("Meeting Assistant API 启动完成")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """应用关闭时的清理操作"""
+    
+    yield  # 应用运行期间
+    
+    # ===== 关闭逻辑 =====
     logger.info("Meeting Assistant API 正在关闭...")
-    
-    # 清理Redis服务
-    await cleanup_redis_service()
-    
+    # 可在此处添加清理逻辑，如关闭数据库连接、释放资源等
     logger.info("Meeting Assistant API 已关闭")
 
-# 读取API配置（从环境变量）
-API_HOST = os.getenv("API_HOST", "0.0.0.0")  # 默认0.0.0.0
-API_PORT = int(os.getenv("API_PORT", 8000))  # 转换为整数，默认8000
-DEBUG = os.getenv("DEBUG", "False").lower() == "true"  # 转换为布尔值，默认False
 
-# 从 .env 中获取 CORS_ORIGINS，若未配置则用默认值
+# 创建 FastAPI 应用，传入 lifespan
+app = FastAPI(title="Meeting Assistant API", version="1.0.0", lifespan=lifespan)  # 👈 关键：传入 lifespan
+
+
+# 读取API配置（从环境变量）
+API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_PORT = int(os.getenv("API_PORT", 8000))
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+
+# CORS 配置
 cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
-# 用英文逗号拆分字符串为列表（处理空字符串情况）
 origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 
-# CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    # In production, specify exact origins
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-"""
-针对加密协议新增代码
-"""
 
 
 def get_ssl_paths():
@@ -104,7 +94,6 @@ def get_ssl_paths():
     cert_path = Path(cert_path_str) if cert_path_str else None
     key_path = Path(key_path_str) if key_path_str else None
 
-    # 未配置或至少有一个不存在时，回退到HTTP
     if not cert_path or not key_path:
         logger.warning("未配置证书路径，服务将以HTTP模式启动")
         return None, None
@@ -117,12 +106,13 @@ def get_ssl_paths():
 
 full_cert_path, full_key_path = get_ssl_paths()
 
-# 仅当证书配置有效时加载SSL上下文
 ssl_context = None
 if full_cert_path and full_key_path:
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=str(full_cert_path), keyfile=str(full_key_path))
 
+
+# 日志配置
 DEFAULT_FORMAT = '{time:YYYY-MM-DD HH:mm:ss.SSS} [{level}] - {name}:{function}:{line} - {message}'
 handlers = [
     {'level': 'DEBUG', 'format': DEFAULT_FORMAT, 'sink': sys.stdout},
@@ -131,37 +121,23 @@ handlers = [
 ]
 logger.configure(handlers=handlers)
 
-# Mount static files
+# 静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
-# Mount tests directory for test files
-app.mount("/tests", StaticFiles(directory="tests"), name="tests")
 
+# 路由
 manager = ConnectionManager()
 app.include_router(router.user_manage)
 app.include_router(router.meeting_manage)
 app.include_router(router.attendance_manage)
-app.include_router(router.message_manage)
 
-# WebSocket 路由
-from router.websocket_message import router as websocket_message_router
-app.include_router(websocket_message_router)
-
-
-
-
-# 添加健康检查路由
+# 健康检查
 from router.health_check import router as health_router
 app.include_router(health_router)
 
-# 添加WebSocket测试页面路由
-@app.get("/test_websocket.html")
-async def get_websocket_test():
-    """返回WebSocket测试页面"""
-    return FileResponse("tests/test_websocket.html")
 
+# 启动入口
 if __name__ == "__main__":
     import uvicorn
-    # 根据证书配置选择HTTPS或HTTP启动
     if full_cert_path and full_key_path:
         logger.info(f"以HTTPS模式启动，证书: {full_cert_path}, 密钥: {full_key_path}")
         uvicorn.run(
