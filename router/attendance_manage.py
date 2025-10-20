@@ -29,6 +29,10 @@ from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonS
 from db.conn_manager import ConnectionManager
 from db.databases import DatabaseConfig, DatabaseSessionManager
 
+from services.auth_dependencies import require_auth, require_admin
+
+from services.service_models import User, UserStatus, UserRole
+
 # 对外暴露的依赖注入函数
 db_config = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
@@ -68,10 +72,11 @@ async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)) 
 async def sign(
     name: str,
     meeting_id: str,
-    user_id: str,
+    current_user: User = Depends(require_auth),
     db: Session = Depends(get_db)
 ):
     """人员签到接口"""
+    user_id = current_user.id
     try:
         # 调用服务层的签到方法，传入姓名和数据库会话
         result = await attendance_service.sign_person(db, name, meeting_id,user_id)
@@ -87,12 +92,13 @@ async def sign(
 async def leave(
     name: str,
     meeting_id: str,
-    user_id: str,
+    current_user: User = Depends(require_auth),
     db: Session = Depends(get_db)
 ):
     """
     人员请假接口（绑定会议维度）
     """
+    user_id = current_user.id
     try:
         # 调用服务层请假方法，传入姓名、会议ID和数据库会话
         result = await attendance_service.leave_person(

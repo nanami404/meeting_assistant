@@ -181,7 +181,6 @@ class MeetingService(object):
             await db.commit()
             # 事务提交后，异步刷新对象（已加 await，正确）
             await db.refresh(transcription)
-
             return transcription
 
         except Exception as e:
