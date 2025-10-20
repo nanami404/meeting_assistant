@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 import uuid
 from datetime import datetime
-from typing import Optional, Text
-from models.database import Meeting
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # 自定义基类
 from db.base import Base
+
+# 仅在类型检查时导入，避免循环导入
+if TYPE_CHECKING:
+    from models.database.meeting import Meeting
 
 
 # ==========================

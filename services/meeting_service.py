@@ -1,18 +1,17 @@
 # 标准库
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Dict
+from typing import  Optional
 from loguru import logger
 
 # 第三方库
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException
 
 # 自定义类
-from .service_models import Meeting, Participant, Transcription, PersonSign, User
-from schemas import MeetingCreate,TranscriptionCreate, PersonSignCreate
+from models.database import Meeting, Participant, Transcription, User
+from models.schemas import MeetingCreate,TranscriptionCreate
 
 
 class MeetingService(object):
@@ -91,7 +90,6 @@ class MeetingService(object):
 
     async def update_meeting(self, db: Session, meeting_id: str, meeting_data: MeetingCreate, current_user_id: str) -> Optional[Meeting]:
         """Update a meeting"""
-        from time import timezone
         # 查询用户角色
         user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
         query = db.query(Meeting)
@@ -154,7 +152,6 @@ class MeetingService(object):
     async def save_transcription(self, db: AsyncSession, transcription_data: TranscriptionCreate) -> Transcription:
         # 新增：查询会议是否存在（异步操作，必须加 await）
         # 关键：await 不可少
-        from time import timezone
         meeting_result = await db.execute(
             select(Meeting).filter(Meeting.id == transcription_data.meeting_id)
         )
@@ -199,7 +196,6 @@ class MeetingService(object):
 
     async def update_meeting_status(self, db: Session, meeting_id: str, status: str) -> bool:
         """Update meeting status"""
-        from time import timezone
         meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
         if not meeting:
             return False

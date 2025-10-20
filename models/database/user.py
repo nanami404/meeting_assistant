@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy import String, BigInteger, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # 自定义库
 from db.base import AuditedBase  # ✅ 关键：继承 AuditedBase
-from models.database.meeting import Meeting,Participant
 from models.database.enums import UserRole, UserStatus
+
+# 仅在类型检查时导入，避免循环导入
+if TYPE_CHECKING:
+    from models.database.meeting import Meeting
+    from models.database.participant import Participant
 
 
 class User(AuditedBase):
@@ -67,10 +71,10 @@ class User(AuditedBase):
 
     # 自引用关系（创建者/更新者用户信息）
     creator_user: Mapped[Optional["User"]] = relationship(
-        "User", foreign_keys=[AuditedBase.created_by], remote_side=[id]
+        "User", foreign_keys="User.created_by", remote_side="User.id"
     )
     updater_user: Mapped[Optional["User"]] = relationship(
-        "User", foreign_keys=[AuditedBase.updated_by], remote_side=[id]
+        "User", foreign_keys="User.updated_by", remote_side="User.id"
     )
 
     # 索引

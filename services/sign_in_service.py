@@ -6,12 +6,10 @@ from typing import List, Optional, Dict
 # 第三方库
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
 # 自定义类
-from .service_models import Meeting, Participant, Transcription, PersonSign, User
-from schemas import MeetingCreate,TranscriptionCreate, PersonSignCreate
+from models.database import Meeting, Participant, PersonSign
 
 class SignInService(object):
     async def get_people_sign_status(self, db: Session, meeting_id: str) -> List[PersonSign]:

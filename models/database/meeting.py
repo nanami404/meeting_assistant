@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
 import uuid
 from datetime import datetime
-from models.database import User,Participant,Transcription
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from sqlalchemy import String, Text, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # 自定义基类
 from db.base import AuditedBase
+
+# 仅在类型检查时导入，避免循环导入
+if TYPE_CHECKING:
+    from models.database.user import User
+    from models.database.participant import Participant
+    from models.database.transcription import Transcription
 
 # ======================
 # Meeting 模型（需审计）
@@ -28,7 +33,7 @@ class Meeting(AuditedBase):
 
     # ✅ 审计字段（created_at, updated_at, created_by, updated_by）已由 AuditedBase 提供
 
-    # 关联关系
+    # 关联关系 - 使用字符串引用避免循环导入
     participants: Mapped[List["Participant"]] = relationship(
         "Participant", back_populates="meeting", cascade="all, delete-orphan"
     )
@@ -36,10 +41,10 @@ class Meeting(AuditedBase):
         "Transcription", back_populates="meeting", cascade="all, delete-orphan"
     )
     creator: Mapped[Optional["User"]] = relationship(
-        "User", foreign_keys=[AuditedBase.created_by], back_populates="created_meetings"
+        "User", foreign_keys="Meeting.created_by", back_populates="created_meetings"
     )
     updater: Mapped[Optional["User"]] = relationship(
-        "User", foreign_keys=[AuditedBase.updated_by], back_populates="updated_meetings"
+        "User", foreign_keys="Meeting.updated_by", back_populates="updated_meetings"
     )
 
     __table_args__ = (

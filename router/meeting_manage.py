@@ -1,11 +1,8 @@
 # 标准库
-import base64
 import os
-import json
-from typing import List, Generator
+from typing import List
 from datetime import datetime
 from typing import List
-from typing import Generator
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -17,11 +14,9 @@ from builtins import anext
 #第三方库
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydub import AudioSegment
 
-from fastapi import  WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import   UploadFile, File
 from fastapi import APIRouter,HTTPException, Depends
 
 #自定义库
@@ -31,7 +26,7 @@ from services.meeting_service import MeetingService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
-from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
+from models.schemas import MeetingCreate, MeetingResponse, TranscriptionCreate
 
 
 router = APIRouter(prefix="/api/meetings", tags=["Mettings"])

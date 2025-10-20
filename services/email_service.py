@@ -11,7 +11,7 @@ from email import encoders
 from jinja2 import Template
 
 #自定义库
-from .service_models import Meeting
+from models.database.meeting import Meeting
 
 
 class EmailService(object):

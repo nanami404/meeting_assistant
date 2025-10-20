@@ -24,7 +24,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 # 自定义库
-from .service_models import Meeting, Transcription
+from models.database.meeting import Meeting
+from models.database.transcription import Transcription
 
 
 TABLE_STYLE = 'Table Grid'

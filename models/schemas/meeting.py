@@ -37,7 +37,7 @@ class MeetingBase(BaseModel):
 
 
 class MeetingCreate(MeetingBase):
-    pass
+    participants: List[ParticipantCreate] = []
 
 
 class MeetingResponse(MeetingBase):
@@ -46,7 +46,7 @@ class MeetingResponse(MeetingBase):
     updated_at: datetime
     created_by: Optional[int] = None
     updated_by: Optional[int] = None
-
+    participants: List[ParticipantResponse] = []
     class Config:
         from_attributes = True
 

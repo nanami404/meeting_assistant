@@ -1,5 +1,5 @@
 # 标准库
-from services.service_models import User
+from models.database import User
 
 
 import os
@@ -14,7 +14,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 # 自定义模块
-from .service_models import User, UserStatus
+from models.database import  UserStatus
 from .user_service import UserService
 
 

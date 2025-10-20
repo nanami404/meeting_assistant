@@ -25,7 +25,7 @@ from services.sign_in_service import SignInService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
-from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
+from models.schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
 from db.conn_manager import ConnectionManager
 from db.databases import DatabaseConfig, DatabaseSessionManager
 

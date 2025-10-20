@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
 import uuid
 from datetime import datetime, timezone
-from models.database import Meeting,User
+from typing import TYPE_CHECKING
 from sqlalchemy import String, Boolean, ForeignKey, func, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # 自定义基类
 from db.base import Base
+
+# 仅在类型检查时导入，避免循环导入
+if TYPE_CHECKING:
+    from models.database.meeting import Meeting
+    from models.database.user import User
 
 
 def _utc_now() -> datetime:
