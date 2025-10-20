@@ -39,8 +39,22 @@ class MessageService(object):
         try:
             # 验证用户为管理员
             user = await self.user_service.get_user_by_id(db, current_user_id)
-            if not user or user.user_role != UserRole.ADMIN.value:
+            if not user:
+                logger.warning(f"用户不存在: user_id={current_user_id}")
+                raise ValueError("用户不存在")
+                
+            if user.user_role != UserRole.ADMIN.value:
+                logger.warning(f"非管理员用户尝试发送消息: user_id={current_user_id}, role={user.user_role}")
                 raise ValueError("只有管理员可以发送消息")
+
+            # 验证输入参数
+            if not message_data.title and not message_data.content:
+                logger.warning("消息标题和内容不能同时为空")
+                raise ValueError("消息标题和内容不能同时为空")
+                
+            if not message_data.recipient_ids:
+                logger.warning("消息接收者列表不能为空")
+                raise ValueError("消息接收者列表不能为空")
 
             # 开始事务
             db.begin()
@@ -58,6 +72,7 @@ class MessageService(object):
 
             # 为每个recipient_id创建关联记录
             valid_recipient_count = 0
+            invalid_recipients = []
             for recipient_id in message_data.recipient_ids:
                 # 验证接收者是否存在
                 recipient_user = await self.user_service.get_user_by_id(db, recipient_id)
@@ -71,16 +86,18 @@ class MessageService(object):
                     db.add(message_recipient)
                     valid_recipient_count += 1
                 else:
+                    invalid_recipients.append(recipient_id)
                     logger.warning(f"消息接收者不存在，已跳过: recipient_id={recipient_id}")
 
             # 如果没有有效的接收者，回滚事务
             if valid_recipient_count == 0:
                 db.rollback()
+                logger.warning(f"没有有效的消息接收者: invalid_recipients={invalid_recipients}")
                 raise ValueError("没有有效的消息接收者")
 
             db.commit()
             db.refresh(message)
-            logger.info(f"管理员 {current_user_id} 成功发送消息: {message.id} 给 {valid_recipient_count} 个用户")
+            logger.info(f"管理员 {current_user_id} 成功发送消息: {message.id} 给 {valid_recipient_count} 个用户, 无效接收者: {len(invalid_recipients)} 个")
             return message
 
         except ValueError as ve:
@@ -113,6 +130,12 @@ class MessageService(object):
             tuple: (消息接收记录列表, 总数)
         """
         try:
+            # 验证参数
+            if page < 1:
+                page = 1
+            if page_size < 1 or page_size > 100:
+                page_size = 20
+                
             # 构建查询
             query = db.query(MessageRecipient).join(Message).filter(
                 MessageRecipient.recipient_id == current_user_id
@@ -131,7 +154,7 @@ class MessageService(object):
             offset = (page - 1) * page_size
             items = query.order_by(MessageRecipient.created_at.desc()).offset(offset).limit(page_size).all()
 
-            logger.info(f"用户 {current_user_id} 查询消息列表: 页码={page}, 页大小={page_size}, 总数={total}")
+            logger.info(f"用户 {current_user_id} 查询消息列表: 页码={page}, 页大小={page_size}, 总数={total}, 已读过滤={is_read}")
             return items, total
 
         except Exception as e:
@@ -157,6 +180,11 @@ class MessageService(object):
             int: 更新的记录数量
         """
         try:
+            # 验证参数
+            if message_id is not None and message_id <= 0:
+                logger.warning(f"无效的消息ID: message_id={message_id}")
+                raise ValueError("无效的消息ID")
+                
             # 开始事务
             db.begin()
 
@@ -169,6 +197,19 @@ class MessageService(object):
             
             # 如果指定了消息ID，则添加消息ID过滤
             if message_id is not None:
+                # 验证用户是否有权限操作该消息
+                msg_recipient = db.query(MessageRecipient).filter(
+                    and_(
+                        MessageRecipient.message_id == message_id,
+                        MessageRecipient.recipient_id == current_user_id
+                    )
+                ).first()
+                
+                if not msg_recipient:
+                    db.rollback()
+                    logger.warning(f"用户尝试标记非自己接收的消息: user_id={current_user_id}, message_id={message_id}")
+                    raise ValueError("无权限操作该消息")
+                    
                 update_conditions.append(MessageRecipient.message_id == message_id)
 
             # 执行更新
@@ -181,9 +222,14 @@ class MessageService(object):
             }, synchronize_session=False)
 
             db.commit()
-            logger.info(f"用户 {current_user_id} 标记消息为已读: message_id={message_id}, mark_all={mark_all}, 更新数量={updated_count}")
+            action = "标记所有未读消息" if mark_all else f"标记消息 {message_id}"
+            logger.info(f"用户 {current_user_id} {action} 为已读，更新数量: {updated_count}")
             return updated_count
 
+        except ValueError as ve:
+            logger.warning(f"标记消息为已读参数错误: {ve}")
+            db.rollback()
+            raise ve
         except Exception as e:
             logger.error(f"标记消息为已读失败: {e}")
             db.rollback()
@@ -208,6 +254,15 @@ class MessageService(object):
             int: 删除的记录数量
         """
         try:
+            # 验证参数
+            if message_id is not None and message_id <= 0:
+                logger.warning(f"无效的消息ID: message_id={message_id}")
+                raise ValueError("无效的消息ID")
+                
+            if delete_type and delete_type not in ["read", "unread", "all"]:
+                logger.warning(f"无效的删除类型: delete_type={delete_type}")
+                raise ValueError("无效的删除类型")
+                
             # 开始事务
             db.begin()
 
@@ -216,7 +271,19 @@ class MessageService(object):
 
             # 根据参数确定删除条件
             if message_id is not None:
-                # 删除指定消息
+                # 验证用户是否有权限删除该消息
+                msg_recipient = db.query(MessageRecipient).filter(
+                    and_(
+                        MessageRecipient.message_id == message_id,
+                        MessageRecipient.recipient_id == current_user_id
+                    )
+                ).first()
+                
+                if not msg_recipient:
+                    db.rollback()
+                    logger.warning(f"用户尝试删除非自己接收的消息: user_id={current_user_id}, message_id={message_id}")
+                    raise ValueError("无权限删除该消息")
+                    
                 delete_conditions.append(MessageRecipient.message_id == message_id)
             elif delete_type == "read":
                 # 删除已读消息
@@ -230,6 +297,7 @@ class MessageService(object):
             else:
                 # 如果没有指定message_id且delete_type为None，则不执行删除
                 db.rollback()
+                logger.warning("删除消息参数不完整")
                 return 0
 
             # 执行删除
@@ -238,9 +306,14 @@ class MessageService(object):
             ).delete(synchronize_session=False)
 
             db.commit()
-            logger.info(f"用户 {current_user_id} 删除消息: message_id={message_id}, delete_type={delete_type}, 删除数量={deleted_count}")
+            action = f"删除消息 {message_id}" if message_id else f"按类型删除消息 {delete_type}"
+            logger.info(f"用户 {current_user_id} {action}，删除数量: {deleted_count}")
             return deleted_count
 
+        except ValueError as ve:
+            logger.warning(f"删除消息参数错误: {ve}")
+            db.rollback()
+            raise ve
         except Exception as e:
             logger.error(f"删除消息失败: {e}")
             db.rollback()

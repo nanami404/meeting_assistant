@@ -1,5 +1,7 @@
 # 标准库
 from typing import Optional
+import re
+from datetime import datetime
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -40,7 +42,21 @@ def _resp(data=None, message="success", code=0):
 
 
 def _raise(status_code: int, message: str, code: str):
+    logger.warning(f"API错误响应: status_code={status_code}, code={code}, message={message}")
     raise HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def _validate_input(text: str, max_length: int = 10000) -> bool:
+    """验证输入文本的安全性"""
+    if not text:
+        return True
+    if len(text) > max_length:
+        return False
+    # 检查是否包含潜在的恶意字符
+    if re.search(r'[<>"\']', text):
+        logger.warning(f"检测到潜在的恶意字符: {text[:50]}...")
+        return False
+    return True
 
 
 # ============================= 消息管理接口 =============================
@@ -67,10 +83,25 @@ async def send_message(
         HTTPException: 当用户不是管理员或参数错误时
     """
     try:
+        # 输入验证
+        if payload.title and not _validate_input(payload.title, 100):
+            _raise(status.HTTP_400_BAD_REQUEST, "消息标题过长或包含非法字符", "validation_error")
+            
+        if not _validate_input(payload.content):
+            _raise(status.HTTP_400_BAD_REQUEST, "消息内容过长或包含非法字符", "validation_error")
+            
+        if not payload.recipient_ids:
+            _raise(status.HTTP_400_BAD_REQUEST, "接收者列表不能为空", "validation_error")
+            
+        # 验证接收者ID列表
+        for recipient_id in payload.recipient_ids:
+            if not isinstance(recipient_id, int) or recipient_id <= 0:
+                _raise(status.HTTP_400_BAD_REQUEST, "接收者ID必须为正整数", "validation_error")
+
         # 调用服务层创建消息
         message: Message = await message_service.create_message(
             db, 
-            current_user.id, 
+            int(str(current_user.id)), 
             payload
         )
         
@@ -80,8 +111,8 @@ async def send_message(
             title=message.title,
             content=message.content,
             sender_id=message.sender_id,
-            created_at=message.created_at,
-            updated_at=message.updated_at
+            created_at=message.created_at if isinstance(message.created_at, datetime) else datetime.fromisoformat(str(message.created_at)),
+            updated_at=message.updated_at if isinstance(message.updated_at, datetime) else (datetime.fromisoformat(str(message.updated_at)) if message.updated_at else None)
         )
         
         logger.info(f"管理员 {current_user.id} 成功发送消息 {message.id}")
@@ -123,7 +154,7 @@ async def list_messages(
         # 调用服务层查询消息
         items, total = await message_service.get_user_messages(
             db,
-            current_user.id,
+            int(str(current_user.id)),
             page,
             page_size,
             is_read
@@ -132,13 +163,16 @@ async def list_messages(
         # 转换为响应格式
         message_list = []
         for item in items:
+            read_at = item.read_at if isinstance(item.read_at, datetime) else (datetime.fromisoformat(str(item.read_at)) if item.read_at else None)
+            created_at = item.created_at if isinstance(item.created_at, datetime) else datetime.fromisoformat(str(item.created_at))
+            
             message_recipient = MessageRecipientResponse(
                 id=item.id,
                 message_id=item.message_id,
                 recipient_id=item.recipient_id,
                 is_read=item.is_read,
-                read_at=item.read_at,
-                created_at=item.created_at
+                read_at=read_at,
+                created_at=created_at
             )
             message_list.append(message_recipient.model_dump())
         
@@ -194,19 +228,24 @@ async def mark_message_as_read(
         # 验证参数
         if payload.message_id is None:
             _raise(status.HTTP_400_BAD_REQUEST, "message_id不能为空", "validation_error")
-        
+            
+        if not isinstance(payload.message_id, int) or payload.message_id <= 0:
+            _raise(status.HTTP_400_BAD_REQUEST, "message_id必须为正整数", "validation_error")
+
         # 调用服务层标记消息为已读
         updated_count = await message_service.mark_messages_as_read(
             db,
-            current_user.id,
+            int(str(current_user.id)),
             message_id=payload.message_id
         )
         
-        response_data = BatchOperationResponse(updated_count=updated_count)
+        response_data = BatchOperationResponse(updated_count=updated_count, deleted_count=0)
         
         logger.info(f"用户 {current_user.id} 标记消息 {payload.message_id} 为已读")
         return _resp(response_data.model_dump(), "标记成功")
         
+    except ValueError as ve:
+        _raise(status.HTTP_400_BAD_REQUEST, str(ve), "validation_error")
     except HTTPException:
         raise
     except Exception as e:
@@ -237,15 +276,17 @@ async def mark_all_messages_as_read(
         # 调用服务层标记所有未读消息为已读
         updated_count = await message_service.mark_messages_as_read(
             db,
-            current_user.id,
+            int(str(current_user.id)),
             mark_all=True
         )
         
-        response_data = BatchOperationResponse(updated_count=updated_count)
+        response_data = BatchOperationResponse(updated_count=updated_count, deleted_count=0)
         
         logger.info(f"用户 {current_user.id} 标记所有未读消息为已读，更新数量: {updated_count}")
         return _resp(response_data.model_dump(), "标记成功")
         
+    except ValueError as ve:
+        _raise(status.HTTP_400_BAD_REQUEST, str(ve), "validation_error")
     except Exception as e:
         logger.error(f"标记所有消息为已读异常: {e}")
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
@@ -277,22 +318,29 @@ async def delete_message(
         if payload.message_id is None and payload.type is None:
             _raise(status.HTTP_400_BAD_REQUEST, "message_id和type不能同时为空", "validation_error")
         
+        if payload.message_id is not None:
+            if not isinstance(payload.message_id, int) or payload.message_id <= 0:
+                _raise(status.HTTP_400_BAD_REQUEST, "message_id必须为正整数", "validation_error")
+        
         if payload.type and payload.type not in ["read", "unread", "all"]:
             _raise(status.HTTP_400_BAD_REQUEST, "type参数必须为read、unread或all", "validation_error")
-        
+
         # 调用服务层删除消息
         deleted_count = await message_service.delete_messages(
             db,
-            current_user.id,
+            int(str(current_user.id)),
             message_id=payload.message_id,
             delete_type=payload.type
         )
         
-        response_data = BatchOperationResponse(deleted_count=deleted_count)
+        response_data = BatchOperationResponse(deleted_count=deleted_count, updated_count=0)
         
-        logger.info(f"用户 {current_user.id} 删除消息: message_id={payload.message_id}, type={payload.type}, 删除数量: {deleted_count}")
+        action = f"删除消息 {payload.message_id}" if payload.message_id else f"按类型删除消息 {payload.type}"
+        logger.info(f"用户 {current_user.id} {action}，删除数量: {deleted_count}")
         return _resp(response_data.model_dump(), "删除成功")
         
+    except ValueError as ve:
+        _raise(status.HTTP_400_BAD_REQUEST, str(ve), "validation_error")
     except HTTPException:
         raise
     except Exception as e:
