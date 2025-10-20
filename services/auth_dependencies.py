@@ -66,7 +66,8 @@ async def get_current_user(
     if user.status != UserStatus.ACTIVE.value:  # type: ignore
         _raise_http(status.HTTP_403_FORBIDDEN, f"用户状态为{user.status}，禁止访问", "forbidden")  # type: ignore
 
-    return user
+    # 明确返回类型为 User，而不是 Optional[User]
+    return user  # type: ignore
 
 
 def require_auth(current_user: User = Depends(dependency=get_current_user)) -> User:
