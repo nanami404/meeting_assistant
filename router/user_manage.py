@@ -21,7 +21,7 @@ user_service = UserService()
 auth_service = AuthService()
 
 # 对外暴露的依赖注入函数
-db_config = DatabaseConfig()
+db_config: DatabaseConfig = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
 get_db = db_manager.get_sync_session  # 同步会话依赖
 get_async_db = db_manager.get_async_session  # 异步会话依赖
@@ -41,9 +41,10 @@ def _raise(status_code: int, message: str, code: str):
 
 
 def _extract_bearer_token(authorization: Optional[str]) -> str:
+    # 确保 authorization 不为 None 后再调用 split()
     if not authorization:
         _raise(status.HTTP_401_UNAUTHORIZED, "缺少Authorization头", "unauthorized")
-    parts = authorization.split()
+    parts = authorization.split()  
     if len(parts) != 2 or parts[0].lower() != "bearer":
         _raise(status.HTTP_401_UNAUTHORIZED, "Authorization格式错误，应为'Bearer <token>'", "unauthorized")
     return parts[1]
@@ -57,7 +58,7 @@ async def login(payload: UserLogin, db: Session = Depends(get_db)):
         tokens = await auth_service.login_and_issue(db, payload.username, payload.password, user_service)
         if not tokens:
             _raise(status.HTTP_401_UNAUTHORIZED, "用户名或密码错误", "auth_failed")
-        access_token, refresh_token = tokens
+        access_token, refresh_token = tokens  
         return _resp({"access_token": access_token, "refresh_token": refresh_token})
     except HTTPException:
         raise
@@ -98,16 +99,19 @@ async def refresh(
         payload = auth_service.verify_token(refresh_token, expected_type="refresh")
         if not payload:
             _raise(status.HTTP_401_UNAUTHORIZED, "无效或过期的刷新令牌", "unauthorized")
-        user_id = payload.get("sub")
-        user = await user_service.get_user_by_id(db, user_id)
+        user_id: str = payload.get("sub")  
+        if not user_id:
+            _raise(status.HTTP_401_UNAUTHORIZED, "令牌缺少用户标识", "unauthorized")
+        user = await user_service.get_user_by_id(db, int(user_id))
         if not user:
             _raise(status.HTTP_401_UNAUTHORIZED, "用户不存在或已删除", "unauthorized")
-        if user.status != UserStatus.ACTIVE.value:
+        # 修复 ColumnElement[bool] 类型错误：将比较结果转换为 Python 布尔值
+        if user is not None and str(user.status) != UserStatus.ACTIVE.value:  
             _raise(status.HTTP_403_FORBIDDEN, f"用户状态为{user.status}，禁止刷新", "forbidden")
         new_tokens = auth_service.refresh_access_token(refresh_token, user)
         if not new_tokens:
             _raise(status.HTTP_400_BAD_REQUEST, "刷新令牌失败", "refresh_failed")
-        access_token, new_refresh = new_tokens
+        access_token, new_refresh = new_tokens  
         return _resp({"access_token": access_token, "refresh_token": new_refresh})
     except HTTPException:
         raise
@@ -122,19 +126,19 @@ async def profile(current_user: User = Depends(require_auth)):
     """获取当前登录用户的详细信息"""
     try:
         user_data = UserResponse(
-            id=current_user.id,
-            name=current_user.name,
-            user_name=current_user.user_name,
-            gender=current_user.gender,
-            phone=current_user.phone,
-            email=current_user.email,
-            company=current_user.company,
-            user_role=current_user.user_role,
-            status=current_user.status,
-            created_at=current_user.created_at,
-            updated_at=current_user.updated_at,
-            created_by=current_user.created_by,
-            updated_by=current_user.updated_by
+            id=int(current_user.id),  
+            name=str(current_user.name),  
+            user_name=str(current_user.user_name),  
+            gender=str(current_user.gender) if current_user.gender is not None else None,  
+            phone=str(current_user.phone) if current_user.phone is not None else None,  
+            email=str(current_user.email) if current_user.email is not None else None,  
+            company=str(current_user.company) if current_user.company is not None else None,  
+            user_role=str(current_user.user_role),  
+            status=str(current_user.status),  
+            created_at=current_user.created_at,  
+            updated_at=current_user.updated_at,  
+            created_by=str(current_user.created_by) if current_user.created_by is not None else None,  
+            updated_by=str(current_user.updated_by) if current_user.updated_by is not None else None  
         )
         return _resp(user_data.dict())
     except Exception as e:
@@ -186,12 +190,12 @@ async def list_users_public(
         user_list = []
         for user in users:
             user_basic = UserBasicResponse(
-                id=user.id,
-                name=user.name,
-                user_name=user.user_name,
-                phone=user.phone,
-                email=user.email,
-                company=user.company
+                id=int(user.id),  
+                name=str(user.name),  
+                user_name=str(user.user_name),  
+                phone=str(user.phone) if user.phone is not None else None,  
+                email=str(user.email) if user.email is not None else None,  
+                company=str(user.company) if user.company is not None else None  
             )
             user_list.append(user_basic.dict())
         
@@ -228,21 +232,21 @@ async def create_user(
 ):
     """创建新用户（仅管理员）"""
     try:
-        user = await user_service.create_user(db, payload, created_by=current_user.id)
+        user = await user_service.create_user(db, payload, created_by=int(current_user.id))  
         user_data = UserResponse(
-            id=user.id,
-            name=user.name,
-            user_name=user.user_name,
-            gender=user.gender,
-            phone=user.phone,
-            email=user.email,
-            company=user.company,
-            user_role=user.user_role,
-            status=user.status,
-            created_at=user.created_at,
-            updated_at=user.updated_at,
-            created_by=user.created_by,
-            updated_by=user.updated_by
+            id=int(user.id),  
+            name=str(user.name),  
+            user_name=str(user.user_name),  
+            gender=str(user.gender) if user.gender is not None else None,  
+            phone=str(user.phone) if user.phone is not None else None,  
+            email=str(user.email) if user.email is not None else None,  
+            company=str(user.company) if user.company is not None else None,  
+            user_role=str(user.user_role),  
+            status=str(user.status),  
+            created_at=user.created_at,  
+            updated_at=user.updated_at,  
+            created_by=str(user.created_by) if user.created_by is not None else None,  
+            updated_by=str(user.updated_by) if user.updated_by is not None else None  
         )
         return _resp(user_data.dict())
     except ValueError as ve:
@@ -278,19 +282,19 @@ async def register_user(
 
         # 构造响应
         user_data = UserResponse(
-            id=user.id,
-            name=user.name,
-            user_name=user.user_name,
-            gender=user.gender,
-            phone=user.phone,
-            email=user.email,
-            company=user.company,
-            user_role=user.user_role,
-            status=user.status,
-            created_at=user.created_at,
-            updated_at=user.updated_at,
-            created_by=user.created_by,
-            updated_by=user.updated_by
+            id=int(user.id),  
+            name=str(user.name),  
+            user_name=str(user.user_name),  
+            gender=str(user.gender) if user.gender is not None else None,  
+            phone=str(user.phone) if user.phone is not None else None,  
+            email=str(user.email) if user.email is not None else None,  
+            company=str(user.company) if user.company is not None else None,  
+            user_role=str(user.user_role),  
+            status=str(user.status),  
+            created_at=user.created_at,  
+            updated_at=user.updated_at,  
+            created_by=str(user.created_by) if user.created_by is not None else None,  
+            updated_by=str(user.updated_by) if user.updated_by is not None else None  
         )
         return _resp(user_data.dict(), message="注册成功")
     except HTTPException:
@@ -338,19 +342,19 @@ async def list_users(
         data_items: List[dict] = []
         for u in items:
             data_items.append(UserResponse(
-                id=u.id,
-                user_name=u.user_name,
-                name=u.name,
-                email=u.email,
-                gender=u.gender,
-                phone=u.phone,
-                company=u.company,
-                user_role=u.user_role,
-                status=u.status,
-                created_at=u.created_at,
-                updated_at=u.updated_at,
-                created_by=u.created_by,
-                updated_by=u.updated_by,
+                id=int(u.id),  
+                user_name=str(u.user_name),  
+                name=str(u.name),  
+                email=str(u.email) if u.email is not None else None,  
+                gender=str(u.gender) if u.gender is not None else None,  
+                phone=str(u.phone) if u.phone is not None else None,  
+                company=str(u.company) if u.company is not None else None,  
+                user_role=str(u.user_role),  
+                status=str(u.status),  
+                created_at=u.created_at,  
+                updated_at=u.updated_at,  
+                created_by=str(u.created_by) if u.created_by is not None else None,  
+                updated_by=str(u.updated_by) if u.updated_by is not None else None,  
             ).dict())
         return _resp({"items": data_items, "total": total, "page": page, "page_size": page_size})
     except Exception as e:
@@ -363,26 +367,27 @@ async def get_user(user_id: int, db: Session = Depends(get_db), current_user: Us
     """获取用户详情（权限控制：普通用户只能查询自己的信息，管理员可以查询任意用户信息）"""
     try:
         # 权限检查：普通用户只能查询自己的信息，管理员可以查询任意用户信息
-        if current_user.user_role != "admin" and current_user.id != user_id:
+        # 修复 ColumnElement[bool] 类型错误：将比较结果转换为 Python 布尔值
+        if str(current_user.user_role) != "admin" and int(current_user.id) != user_id:  
             _raise(status.HTTP_403_FORBIDDEN, "权限不足，只能查询自己的用户信息", "forbidden")
         
         user = await user_service.get_user_by_id(db, user_id)
         if not user:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
-        data = UserResponse(
-            id=user.id,
-            user_name=user.user_name,
-            name=user.name,
-            email=user.email,
-            gender=user.gender,
-            phone=user.phone,
-            company=user.company,
-            user_role=user.user_role,
-            status=user.status,
-            created_at=user.created_at,
-            updated_at=user.updated_at,
-            created_by=user.created_by,
-            updated_by=user.updated_by,
+        data: UserResponse = UserResponse(
+            id=int(user.id),  
+            user_name=str(user.user_name),  
+            name=str(user.name),  
+            email=str(user.email) if user.email is not None else None,  
+            gender=str(user.gender) if user.gender is not None else None,  
+            phone=str(user.phone) if user.phone is not None else None,  
+            company=str(user.company) if user.company is not None else None,  
+            user_role=str(user.user_role),  
+            status=str(user.status),  
+            created_at=user.created_at,  
+            updated_at=user.updated_at,  
+            created_by=str(user.created_by) if user.created_by is not None else None,  
+            updated_by=str(user.updated_by) if user.updated_by is not None else None,  
         )
         return _resp(data.dict())
     except HTTPException:
@@ -396,23 +401,23 @@ async def get_user(user_id: int, db: Session = Depends(get_db), current_user: Us
 async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """更新用户信息（管理员权限）"""
     try:
-        user = await user_service.update_user(db, user_id, payload, updated_by=current_user.id)
+        user = await user_service.update_user(db, user_id, payload, updated_by=int(current_user.id))  
         if not user:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         data = UserResponse(
-            id=user.id,
-            user_name=user.user_name,
-            name=user.name,
-            email=user.email,
-            gender=user.gender,
-            phone=user.phone,
-            company=user.company,
-            user_role=user.user_role,
-            status=user.status,
-            created_at=user.created_at,
-            updated_at=user.updated_at,
-            created_by=user.created_by,
-            updated_by=user.updated_by,
+            id=int(user.id),  
+            user_name=str(user.user_name),  
+            name=str(user.name),  
+            email=str(user.email) if user.email is not None else None,  
+            gender=str(user.gender) if user.gender is not None else None,  
+            phone=str(user.phone) if user.phone is not None else None,  
+            company=str(user.company) if user.company is not None else None,  
+            user_role=str(user.user_role),  
+            status=str(user.status),  
+            created_at=user.created_at,  
+            updated_at=user.updated_at,  
+            created_by=str(user.created_by) if user.created_by is not None else None,  
+            updated_by=str(user.updated_by) if user.updated_by is not None else None,  
         )
         return _resp(data.dict())
     except HTTPException:
@@ -431,7 +436,7 @@ async def delete_user(user_id: int, hard: bool = Query(False, description="是�
     - hard=true：物理删除用户并清理相关引用
     """
     try:
-        ok = await user_service.delete_user(db, user_id, operator_id=current_user.id, hard=hard)
+        ok = await user_service.delete_user(db, user_id, operator_id=int(current_user.id))  
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         return _resp({"deleted": True, "hard": hard})
@@ -448,7 +453,7 @@ async def change_status(user_id: int, status_: str = Query(..., alias="status"),
     try:
         if status_ not in [UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value]:
             _raise(status.HTTP_400_BAD_REQUEST, "非法的用户状态", "bad_request")
-        ok = await user_service.change_user_status(db, user_id, status_, operator_id=current_user.id)
+        ok = await user_service.change_user_status(db, user_id, status_, operator_id=int(current_user.id))  
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         return _resp({"user_id": user_id, "status": status_})
@@ -463,7 +468,7 @@ async def change_status(user_id: int, status_: str = Query(..., alias="status"),
 async def reset_password(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """重置指定用户密码为默认值（管理员权限）"""
     try:
-        ok = await user_service.reset_password(db, user_id, operator_id=current_user.id)
+        ok = await user_service.reset_password(db, user_id, operator_id=int(current_user.id))  
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         return _resp({"user_id": user_id, "reset": True})

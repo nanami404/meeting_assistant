@@ -1,7 +1,4 @@
 # 标准库
-from fastapi.routing import APIRouter
-
-
 from typing import Dict, Any
 
 # 第三方库
