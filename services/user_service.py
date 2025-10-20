@@ -1,4 +1,5 @@
 # 标准库
+from models.database.user import User
 from services.service_models import User
 
 
@@ -237,7 +238,7 @@ class UserService(object):
     async def update_user(self, db: Session, user_id: int, update_data: UserUpdate, updated_by: Optional[int] = None) -> Optional[User]:
         """更新用户信息（包含唯一性检查）"""
         try:
-            user = db.query(User).filter(User.id == user_id).first()
+            user: User | None = db.query(User).filter(User.id == user_id).first()
             if not user:
                 return None
 
@@ -251,8 +252,8 @@ class UserService(object):
                     if exists:
                         raise ValueError("user_name 已被占用")
 
-            # 映射字段更新（注意 user_role）
-            field_mapping = {
+            # 映射字段更新
+            field_mapping: dict[str, str] = {
                 "name": "name",
                 "user_name": "user_name",
                 "gender": "gender",
@@ -260,19 +261,17 @@ class UserService(object):
                 "email": "email",
                 "company": "company",
                 "status": "status",
+                "user_role": "user_role"
             }
 
             for api_field, model_field in field_mapping.items():
                 if api_field in provided:
                     setattr(user, model_field, provided[api_field])
 
-            if "user_role" in provided:
-                user.user_role = provided["user_role"]
-
             # 更新审计字段
-            user.updated_at = datetime.now(tz=timezone.utc)
+            user.updated_at = datetime.now(tz=timezone.utc)  # type: ignore
             if updated_by:
-                user.updated_by = updated_by
+                user.updated_by = updated_by  # type: ignore
 
             db.commit()
             db.refresh(user)
@@ -296,10 +295,10 @@ class UserService(object):
                 return False
 
             if not hard:
-                user.status = UserStatus.INACTIVE.value
-                user.updated_at = datetime.now(timezone.utc)
+                user.status = UserStatus.INACTIVE.value  # type: ignore
+                user.updated_at = datetime.now(timezone.utc)  # type: ignore
                 if operator_id:
-                    user.updated_by = operator_id
+                    user.updated_by = operator_id  # type: ignore
                 db.commit()
                 logger.info(f"已软删除用户: {user_id}")
                 return True
@@ -320,69 +319,69 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def verify_password(self, user: User, plain_password: str) -> bool:
-        """验证用户密码（bcrypt）"""
-        try:
-            if not user.password_hash:
-                return False
-            return bcrypt.checkpw(plain_password.encode("utf-8"), user.password_hash.encode("utf-8"))
-        except Exception as e:
-            logger.error(f"验证密码失败(user={user.id}): {e}")
-            return False
-
-    async def change_user_status(self, db: Session, user_id: int, status: str, operator_id: Optional[int] = None) -> bool:
-        """修改用户状态：active / inactive / suspended"""
-        try:
-            valid_statuses = {UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value}
-            if status not in valid_statuses:
-                raise ValueError("非法的用户状态")
-
-            user = db.query(User).filter(User.id == user_id).first()
-            if not user:
+        async def verify_password(self, user: User, plain_password: str) -> bool:
+            """验证用户密码（bcrypt）"""
+            try:
+                if not user.password_hash:  # type: ignore
+                    return False
+                return bcrypt.checkpw(plain_password.encode("utf-8"), user.password_hash.encode("utf-8"))  # type: ignore
+            except Exception as e:
+                logger.error(f"验证密码失败(user={user.id}): {e}")
                 return False
 
-            user.status = status
-            user.updated_at = datetime.now(timezone.utc)
-            if operator_id:
-                user.updated_by = operator_id
+        async def change_user_status(self, db: Session, user_id: int, status: str, operator_id: Optional[int] = None) -> bool:
+            """修改用户状态：active / inactive / suspended"""
+            try:
+                valid_statuses = {UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value}
+                if status not in valid_statuses:
+                    raise ValueError("非法的用户状态")
 
-            db.commit()
-            logger.info(f"用户状态修改成功: {user_id} -> {status}")
-            return True
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user:
+                    return False
 
-        except ValueError as ve:
-            logger.warning(f"修改用户状态参数错误(id={user_id}): {ve}")
-            db.rollback()
-            raise ve
-        except Exception as e:
-            logger.error(f"修改用户状态失败(id={user_id}): {e}")
-            db.rollback()
-            raise e
+                user.status = status  # type: ignore
+                user.updated_at = datetime.now(timezone.utc)  # type: ignore
+                if operator_id:
+                    user.updated_by = operator_id  # type: ignore
 
-    async def reset_password(
-        self,
-        db: Session,
-        user_id: int,
-        operator_id: Optional[int] = None,
-        default_password: str = "Test@1234"
-    ) -> bool:
-        """重置用户密码为默认值（bcrypt加密）"""
-        try:
-            user = db.query(User).filter(User.id == user_id).first()
-            if not user:
-                return False
+                db.commit()
+                logger.info(f"用户状态修改成功: {user_id} -> {status}")
+                return True
 
-            hashed = bcrypt.hashpw(default_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-            user.password_hash = hashed
-            user.updated_at = datetime.now(timezone.utc)
-            if operator_id:
-                user.updated_by = operator_id
+            except ValueError as ve:
+                logger.warning(f"修改用户状态参数错误(id={user_id}): {ve}")
+                db.rollback()
+                raise ve
+            except Exception as e:
+                logger.error(f"修改用户状态失败(id={user_id}): {e}")
+                db.rollback()
+                raise e
 
-            db.commit()
-            logger.info(f"用户密码已重置: user_id={user_id}")
-            return True
+        async def reset_password(
+            self,
+            db: Session,
+            user_id: int,
+            operator_id: Optional[int] = None,
+            default_password: str = "Test@1234"
+        ) -> bool:
+            """重置用户密码为默认值（bcrypt加密）"""
+            try:
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user:
+                    return False
 
-        except Exception as e:
-            logger.error(f"重置用户密码失败(id={user_id}): {e}")
-            db.rollback()
-            raise e
+                hashed = bcrypt.hashpw(default_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                user.password_hash = hashed  # type: ignore
+                user.updated_at = datetime.now(timezone.utc)  # type: ignore
+                if operator_id:
+                    user.updated_by = operator_id  # type: ignore
+
+                db.commit()
+                logger.info(f"用户密码已重置: user_id={user_id}")
+                return True
+
+            except Exception as e:
+                logger.error(f"重置用户密码失败(id={user_id}): {e}")
+                db.rollback()
+                raise e

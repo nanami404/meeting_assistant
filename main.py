@@ -23,7 +23,7 @@ from services.speech_service import SpeechService
 from services.email_service import EmailService
 import router
 from router import user_manage as user_router
-
+from db.base import Base
 # 对外暴露的依赖注入函数
 db_config = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
@@ -38,16 +38,15 @@ email_service = EmailService()
 
 load_dotenv()
 
-Base = declarative_base()
 engine = create_engine(
     db_config.sync_url,
     echo=True  # Set to False in production
 )
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# 创建数据库表
+Base.metadata.create_all(bind=db_manager.sync_engine)
 
 
-# ✅ 新增：Lifespan 事件处理器
+# Lifespan 事件处理器
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理：启动和关闭事件"""
@@ -65,7 +64,7 @@ async def lifespan(app: FastAPI):
 
 
 # 创建 FastAPI 应用，传入 lifespan
-app = FastAPI(title="Meeting Assistant API", version="1.0.0", lifespan=lifespan)  # 👈 关键：传入 lifespan
+app = FastAPI(title="Meeting Assistant API", version="1.0.0", lifespan=lifespan)
 
 
 # 读取API配置（从环境变量）

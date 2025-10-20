@@ -1,98 +1,91 @@
-# 标准库
+# -*- coding: utf-8 -*-
 import uuid
 from datetime import datetime
-import pytz
+from models.database import User
+from typing import List, Optional
+from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, Index, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-# 第三方库 - SQLAlchemy相关
-from sqlalchemy import (
-    Column,
-    String,
-    DateTime,
-    ForeignKey,
-    Index,
-    func
-)
-from sqlalchemy import (
-    BigInteger,
-    Text,
-    Integer,
-    Boolean
-)
-from sqlalchemy.orm import relationship
+# 自定义基类
+from db.base import AuditedBase, Base  # AuditedBase 用于需审计的表，Base 用于简单表
 
-# 自定义库
-from db.databases import Base
-
-shanghai_tz = pytz.timezone('Asia/Shanghai')
-
-
-class Meeting(Base):
+# ======================
+# Meeting 模型（需审计）
+# ======================
+class Meeting(AuditedBase):
     __tablename__ = "meetings"
-    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
-    title = Column(String(75), nullable=False)
-    description = Column(Text)
-    date_time = Column(DateTime, nullable=False)
-    location = Column(String(100))
-    duration_minutes = Column(Integer, default=60)
-    agenda = Column(Text)
-    # scheduled, in_progress, completed, cancelled
-    status = Column(String(50), default="scheduled")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), onupdate=datetime.utcnow)
-    # 关联字段：创建者/更新者
-    created_by = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="创建者用户ID")
-    updated_by = Column(BigInteger, ForeignKey("users.id"), nullable=True, comment="更新者用户ID")
+
+    id: Mapped[str] = mapped_column(
+        String(50), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    title: Mapped[str] = mapped_column(String(75), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    date_time: Mapped[datetime] = mapped_column(nullable=False)  # 业务时间，可带时区或 naive（建议文档说明）
+    location: Mapped[Optional[str]] = mapped_column(String(100))
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    agenda: Mapped[Optional[str]] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(50), default="scheduled")  # scheduled, in_progress, etc.
+
+    # ✅ 审计字段（created_at, updated_at, created_by, updated_by）已由 AuditedBase 提供
 
     # 关联关系
-    participants = relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
-    transcriptions = relationship("Transcription", back_populates="meeting", cascade="all, delete-orphan")
-
-    # 创建者/更新者反向关系
-    creator = relationship("User", foreign_keys=[created_by], back_populates="created_meetings")
-    updater = relationship("User", foreign_keys=[updated_by], back_populates="updated_meetings")
-
-
-class Participant(Base):
-    __tablename__ = "participants"
-    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
-    meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
-    user_code = Column(String(50), ForeignKey("users.id"), nullable=False)
-    name = Column(String(50), nullable=False)
-    email = Column(String(100), nullable=False)
-    user_role = Column(String(50), default="participant")
-    is_required = Column(Boolean, default=True)
-    attendance_status = Column(String(50), default="pending")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz))
-
-    user = relationship(
-        "User",
-        foreign_keys=[user_code],
-        back_populates="participations"  # 与 User 模型中的 participations 对应
+    participants: Mapped[List["Participant"]] = relationship(
+        "Participant", back_populates="meeting", cascade="all, delete-orphan"
     )
-    meeting = relationship("Meeting", back_populates="participants")
+    transcriptions: Mapped[List["Transcription"]] = relationship(
+        "Transcription", back_populates="meeting", cascade="all, delete-orphan"
+    )
+    creator: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[AuditedBase.created_by], back_populates="created_meetings"
+    )
+    updater: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[AuditedBase.updated_by], back_populates="updated_meetings"
+    )
+
+    __table_args__ = (
+        Index("idx_meetings_created_by", "created_by"),
+        Index("idx_meetings_status", "status"),
+        Index("idx_meetings_date_time", "date_time"),
+    )
 
 
+
+
+# ==========================
+# Transcription 模型（简单表，无审计）
+# ==========================
 class Transcription(Base):
     __tablename__ = "transcriptions"
-    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
-    meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
-    speaker_id = Column(String(50), nullable=False)
-    speaker_name = Column(String(50))
-    text = Column(Text, nullable=False)
-    timestamp = Column(DateTime(timezone=True), default=func.utcnow(), nullable=False)
-    confidence_score = Column(Integer, default=100)
-    is_action_item = Column(Boolean, default=False)
-    is_decision = Column(Boolean, default=False)
 
-    meeting = relationship("Meeting", back_populates="transcriptions")
+    id: Mapped[str] = mapped_column(
+        String(50), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), nullable=False)
+    speaker_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    speaker_name: Mapped[Optional[str]] = mapped_column(String(50))
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # 使用 func.now() 存储 UTC 时间（naive），兼容 MySQL
+    timestamp: Mapped[datetime] = mapped_column(default=func.now(), nullable=False)
+    confidence_score: Mapped[int] = mapped_column(Integer, default=100)
+    is_action_item: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_decision: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    meeting: Mapped["Meeting"] = relationship("Meeting", back_populates="transcriptions")
 
 
-# 定义人员签到表模型
+# ========================
+# PersonSign 模型（简单表，无审计）
+# ========================
 class PersonSign(Base):
     __tablename__ = "person_sign"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), index=True)
-    user_code = Column(BigInteger, ForeignKey("users.id"), nullable=False)
-    meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
-    is_signed = Column(Boolean, default=False)
-    is_on_leave = Column(Boolean, default=False)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), index=True)
+    user_code: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), nullable=False)
+    is_signed: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_on_leave: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    __table_args__ = (
+        Index("idx_person_sign_user_meeting", "user_code", "meeting_id"),
+    )

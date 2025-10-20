@@ -5,21 +5,20 @@ from typing import Generator, AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     create_async_engine,
-    async_sessionmaker,  # 👈 关键：使用 async_sessionmaker
+    async_sessionmaker,
 )
 from sqlalchemy.orm import sessionmaker, Session
 
 from dotenv import load_dotenv
 
+# ✅ 关键修改：从你的 base.py 导入自定义 Base（所有模型的根基类）
+from db.base import Base
+
 # 加载环境变量
 load_dotenv()
-
-# 基础模型类（所有数据库模型继承此类）
-Base = declarative_base()
 
 
 class DatabaseConfig:
@@ -33,7 +32,7 @@ class DatabaseConfig:
         self.db_password_raw = os.getenv("MYSQL_PASSWORD", "Siryuan#525@614")
         self.mysql_database = os.getenv("MYSQL_DATABASE", "rjgf_meeting")
 
-        # 对密码中的特殊字符进行URL编码（如#、@等）
+        # 对密码中的特殊字符进行URL编码（如 #、@ 等）
         self.mysql_password = quote_plus(self.db_password_raw)
 
         # 生成同步/异步连接URL
@@ -50,8 +49,8 @@ class DatabaseSessionManager:
         # ========== 同步引擎与会话工厂 ==========
         self.sync_engine = create_engine(
             self.config.sync_url,
-            echo=True,  # 开发环境打印SQL日志，生产环境设为False
-            pool_pre_ping=True  # 连接有效性检查
+            echo=True,  # 开发环境打印SQL日志，生产环境建议设为 False
+            pool_pre_ping=True  # 自动检测连接有效性
         )
         self.sync_session_factory = sessionmaker(
             bind=self.sync_engine,
@@ -59,7 +58,7 @@ class DatabaseSessionManager:
             autoflush=False
         )
 
-        # ========== 异步引擎与会话工厂（使用 async_sessionmaker）==========
+        # ========== 异步引擎与会话工厂 ==========
         self.async_engine = create_async_engine(
             self.config.async_url,
             echo=True,
@@ -108,6 +107,6 @@ class DatabaseSessionManager:
 db_config = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
 
-# 对外暴露的依赖注入函数（与FastAPI路由配合使用）
+# 对外暴露的依赖注入函数（与 FastAPI 路由配合使用）
 get_db = db_manager.get_sync_session      # 同步会话依赖
 get_async_db = db_manager.get_async_session  # 异步会话依赖
