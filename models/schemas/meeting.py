@@ -4,20 +4,22 @@ from typing import List, Optional
 
 
 class ParticipantBase(BaseModel):
-    name: str
-    email: EmailStr
+    name: str = Field(..., max_length=50)
+    email: EmailStr = Field(..., max_length=100)
     user_role: str = "participant"
     is_required: bool = True
+    attendance_status: str = "pending"
 
 
 class ParticipantCreate(ParticipantBase):
-    pass
+    user_code: int
+    meeting_id: str
 
 
 class ParticipantResponse(ParticipantBase):
     id: str
     meeting_id: str
-    attendance_status: str
+    user_code: int
     created_at: datetime
 
     class Config:
@@ -25,40 +27,50 @@ class ParticipantResponse(ParticipantBase):
 
 
 class MeetingBase(BaseModel):
-    title: str
+    title: str = Field(..., max_length=75)
     description: Optional[str] = None
     date_time: datetime
-    location: Optional[str] = None
+    location: Optional[str] = Field(None, max_length=100)
     duration_minutes: int = 60
     agenda: Optional[str] = None
+    status: str = "scheduled"
 
 
 class MeetingCreate(MeetingBase):
-    participants: List[ParticipantCreate] = []
+    pass
 
 
 class MeetingResponse(MeetingBase):
     id: str
-    status: str
     created_at: datetime
     updated_at: datetime
-    participants: List[ParticipantResponse] = []
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
 
     class Config:
         from_attributes = True
 
 
 # 定义人员签到数据模型
-class PersonSignCreate(BaseModel):
-    name: str
-    user_code: Optional[str] = None
+class PersonSignBase(BaseModel):
+    name: str = Field(..., max_length=50)
+    user_code: int
     meeting_id: str
-    is_signed: bool
-    is_on_leave: bool
+    is_signed: bool = False
+    is_on_leave: bool = False
 
 
-class PersonSignResponse(BaseModel):
+class PersonSignCreate(PersonSignBase):
+    pass
+
+
+class PersonSignResponse(PersonSignBase):
     id: int
-    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class PersonSignUpdate(BaseModel):
     is_signed: bool
     is_on_leave: bool

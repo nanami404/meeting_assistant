@@ -14,7 +14,7 @@ class User(AuditedBase):
     __tablename__ = "users"
 
     # 主键字段（AuditedBase 不包含 id，需显式定义）
-    id: Mapped[int] = mapped_column(
+    id: Mapped[BigInteger] = mapped_column(
         BigInteger, primary_key=True, autoincrement=True, comment="用户主键ID（自增）"
     )
 

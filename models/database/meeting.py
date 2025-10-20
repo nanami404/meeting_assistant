@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import uuid
 from datetime import datetime
-from models.database import User
+from models.database import User,Participant,Transcription
 from typing import List, Optional
-from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, Index, func
+from sqlalchemy import String, Text, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # 自定义基类
-from db.base import AuditedBase, Base  # AuditedBase 用于需审计的表，Base 用于简单表
+from db.base import AuditedBase
 
 # ======================
 # Meeting 模型（需审计）
@@ -46,46 +46,4 @@ class Meeting(AuditedBase):
         Index("idx_meetings_created_by", "created_by"),
         Index("idx_meetings_status", "status"),
         Index("idx_meetings_date_time", "date_time"),
-    )
-
-
-
-
-# ==========================
-# Transcription 模型（简单表，无审计）
-# ==========================
-class Transcription(Base):
-    __tablename__ = "transcriptions"
-
-    id: Mapped[str] = mapped_column(
-        String(50), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), nullable=False)
-    speaker_id: Mapped[str] = mapped_column(String(50), nullable=False)
-    speaker_name: Mapped[Optional[str]] = mapped_column(String(50))
-    text: Mapped[str] = mapped_column(Text, nullable=False)
-    # 使用 func.now() 存储 UTC 时间（naive），兼容 MySQL
-    timestamp: Mapped[datetime] = mapped_column(default=func.now(), nullable=False)
-    confidence_score: Mapped[int] = mapped_column(Integer, default=100)
-    is_action_item: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_decision: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    meeting: Mapped["Meeting"] = relationship("Meeting", back_populates="transcriptions")
-
-
-# ========================
-# PersonSign 模型（简单表，无审计）
-# ========================
-class PersonSign(Base):
-    __tablename__ = "person_sign"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), index=True)
-    user_code: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    meeting_id: Mapped[str] = mapped_column(ForeignKey("meetings.id"), nullable=False)
-    is_signed: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_on_leave: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    __table_args__ = (
-        Index("idx_person_sign_user_meeting", "user_code", "meeting_id"),
     )

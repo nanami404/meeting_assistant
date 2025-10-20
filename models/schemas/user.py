@@ -31,29 +31,20 @@ class UserBase(BaseModel):
 
     @field_validator('gender')
     def validate_gender(cls, v):
-        if v is not None and v not in GenderType.__members__:
-            raise ValueError(f'性别必须为{",".join(GenderType.__members__.keys())}')
-        return v
-
-    @field_validator('phone')
-    def validate_phone(cls, v):
-        if v is not None:
-            # 手机号验证
-            pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
-            if not re.match(pattern, v):
-                raise ValueError('手机号格式不正确')
+        if v is not None and v not in [GenderType.MALE.value, GenderType.FEMALE.value, GenderType.OTHER.value]:
+            raise ValueError(f'性别必须为{GenderType.MALE.value}/{GenderType.FEMALE.value}/{GenderType.OTHER.value}')
         return v
 
     @field_validator('user_role')
     def validate_role(cls, v):
-        if v not in UserRole.__members__:
-            raise ValueError(f'用户角色必须为{",".join(UserRole.__members__.keys())}')
+        if v not in [UserRole.ADMIN.value, UserRole.USER.value]:
+            raise ValueError(f'用户角色必须为{UserRole.ADMIN.value}/{UserRole.USER.value}')
         return v
 
     @field_validator('status')
     def validate_status(cls, v):
-        if v not in UserStatus.__members__:
-            raise ValueError(f'用户状态必须为{",".join(UserStatus.__members__.keys())}')
+        if v not in [UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value]:
+            raise ValueError(f'用户状态必须为{UserStatus.ACTIVE.value}/{UserStatus.INACTIVE.value}/{UserStatus.SUSPENDED.value}')
         return v
 
 
