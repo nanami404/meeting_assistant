@@ -31,3 +31,4 @@ pytest-asyncio==1.1.0
 PyAudio==0.2.14
 pocketsphinx
 asyncmy
+pydantic-settings>=2.3.0
