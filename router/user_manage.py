@@ -1,5 +1,5 @@
 # 标准库
-from typing import Optional, List, Tuple
+from typing import Optional, List
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Query
