@@ -7,6 +7,7 @@ from .meeting import *
 from .participant import *
 from .personSign import *
 from .transcription import *
+from .message import *
 
 # 定义公共接口
-__all__ = ["UserRole", "UserStatus","GenderType", "User", "Meeting", "Participant","PersonSign", "Transcription"]
+__all__ = ["UserRole", "UserStatus","GenderType", "User", "Meeting", "Participant","PersonSign", "Transcription", "Message", "MessageRecipient"]

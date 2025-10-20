@@ -4,6 +4,7 @@
 from .user import *
 from .meeting import *
 from .transcription import *
+from .message import *
 
 # 定义公共接口
 __all__ = [
@@ -11,5 +12,11 @@ __all__ = [
     "MeetingCreate", "MeetingResponse", "MeetingBase",
     "ParticipantCreate", "ParticipantResponse", "ParticipantBase",
     "PersonSignCreate", "PersonSignResponse", "PersonSignBase", "PersonSignUpdate",
-    "TranscriptionCreate", "TranscriptionResponse", "TranscriptionBase"
+    "TranscriptionCreate", "TranscriptionResponse", "TranscriptionBase",
+    "MessageBase", "MessageCreate", "MessageUpdate", "MessageResponse",
+    "MessageRecipientBase", "MessageRecipientCreate", "MessageRecipientUpdate", "MessageRecipientResponse",
+    "MessageListRequest", "MessageListResponse",
+    "MarkReadRequest",
+    "DeleteMessageRequest",
+    "BatchOperationResponse"
 ]
