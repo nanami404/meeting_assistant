@@ -228,7 +228,7 @@ async def create_user(
 ):
     """创建新用户（仅管理员）"""
     try:
-        user = await user_service.create_user(db, payload, created_by=current_user.id)
+        user = await user_service.create_user(db, payload, created_by=str(current_user.id))
         user_data = UserResponse(
             id=user.id,
             name=user.name,
@@ -359,11 +359,11 @@ async def list_users(
 
 
 @router.get("/users/{user_id}", summary="获取用户详情", response_model=dict)
-async def get_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
+async def get_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
     """获取用户详情（权限控制：普通用户只能查询自己的信息，管理员可以查询任意用户信息）"""
     try:
         # 权限检查：普通用户只能查询自己的信息，管理员可以查询任意用户信息
-        if current_user.user_role != "admin" and current_user.id != user_id:
+        if current_user.user_role != "admin" and str(current_user.id) != user_id:
             _raise(status.HTTP_403_FORBIDDEN, "权限不足，只能查询自己的用户信息", "forbidden")
         
         user = await user_service.get_user_by_id(db, user_id)
@@ -393,10 +393,10 @@ async def get_user(user_id: int, db: Session = Depends(get_db), current_user: Us
 
 
 @router.put("/users/{user_id}", summary="更新用户信息", response_model=dict)
-async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """更新用户信息（管理员权限）"""
     try:
-        user = await user_service.update_user(db, user_id, payload, updated_by=current_user.id)
+        user = await user_service.update_user(db, user_id, payload, updated_by=str(current_user.id))
         if not user:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         data = UserResponse(
@@ -425,13 +425,13 @@ async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(g
 
 
 @router.delete("/users/{user_id}", summary="删除用户(软/硬删除)", response_model=dict)
-async def delete_user(user_id: int, hard: bool = Query(False, description="是否执行硬删除(物理删除并清理引用)"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+async def delete_user(user_id: str, hard: bool = Query(False, description="是否执行硬删除(物理删除并清理引用)"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """删除用户（管理员权限）
     - 默认软删除：将用户状态置为inactive
     - hard=true：物理删除用户并清理相关引用
     """
     try:
-        ok = await user_service.delete_user(db, user_id, operator_id=current_user.id, hard=hard)
+        ok = await user_service.delete_user(db, user_id, operator_id=str(current_user.id), hard=hard)
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         return _resp({"deleted": True, "hard": hard})
@@ -443,12 +443,12 @@ async def delete_user(user_id: int, hard: bool = Query(False, description="是�
 
 
 @router.patch("/users/{user_id}/status", summary="修改用户状态", response_model=dict)
-async def change_status(user_id: int, status_: str = Query(..., alias="status"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+async def change_status(user_id: str, status_: str = Query(..., alias="status"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """修改用户状态（管理员权限）"""
     try:
         if status_ not in [UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value]:
             _raise(status.HTTP_400_BAD_REQUEST, "非法的用户状态", "bad_request")
-        ok = await user_service.change_user_status(db, user_id, status_, operator_id=current_user.id)
+        ok = await user_service.change_user_status(db, user_id, status_, operator_id=str(current_user.id))
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         return _resp({"user_id": user_id, "status": status_})
@@ -460,10 +460,10 @@ async def change_status(user_id: int, status_: str = Query(..., alias="status"),
 
 
 @router.post("/users/{user_id}/reset_password", summary="重置用户密码为默认值(仅管理员)", response_model=dict)
-async def reset_password(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+async def reset_password(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """重置指定用户密码为默认值（管理员权限）"""
     try:
-        ok = await user_service.reset_password(db, user_id, operator_id=current_user.id)
+        ok = await user_service.reset_password(db, user_id, operator_id=str(current_user.id))
         if not ok:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         return _resp({"user_id": user_id, "reset": True})

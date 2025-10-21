@@ -21,7 +21,7 @@ class UserService(object):
     所有方法使用 async 定义以保持一致的异步接口风格，内部使用同步 Session 操作。
     """
 
-    async def create_user(self, db: Session, user_data: UserCreate, created_by: Optional[int] = None) -> User:
+    async def create_user(self, db: Session, user_data: UserCreate, created_by: Optional[str] = None) -> User:
         """创建新用户（包含密码加密与唯一性检查）
         - 使用 bcrypt 对密码进行加密存储
         - 唯一性校验对齐初始化脚本：仅校验 user_name
@@ -203,13 +203,18 @@ class UserService(object):
             logger.error(f"查询用户列表失败: {e}")
             raise e
 
-    async def get_user_by_id(self, db: Session, user_id: int, active_only: bool = True) -> Optional[User]:
+    async def get_user_by_id(self, db: Session, user_id: str, active_only: bool = True) -> Optional[User]:
         """根据ID获取用户
         - active_only=True：仅返回活跃用户（用于非管理员或公共查询场景）
         - active_only=False：返回任意状态用户（用于管理员场景）
         """
         try:
-            query = db.query(User).filter(User.id == user_id)
+            # 将字符串ID转换为整数以匹配 BigInteger 主键类型
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                user_id_int = None
+            query = db.query(User).filter(User.id == user_id_int) if user_id_int is not None else db.query(User).filter(User.id == user_id)
             if active_only:
                 query = query.filter(User.status == UserStatus.ACTIVE.value)
             return query.first()
@@ -268,12 +273,17 @@ class UserService(object):
             logger.error(f"根据登录标识符查询用户失败(identifier={identifier}): {e}")
             raise e
 
-    async def update_user(self, db: Session, user_id: int, update_data: UserUpdate, updated_by: Optional[int] = None) -> Optional[User]:
+    async def update_user(self, db: Session, user_id: str, update_data: UserUpdate, updated_by: Optional[str] = None) -> Optional[User]:
         """更新用户信息（包含唯一性检查）
         - 仅更新请求中显式提供的字段（即使值为 None 也会应用），以支持将可选字段置空
         """
         try:
-            user = db.query(User).filter(User.id == user_id).first()
+            # 将字符串ID转换为整数以匹配 BigInteger 主键类型
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                user_id_int = None
+            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return None
 
@@ -284,7 +294,10 @@ class UserService(object):
             def check_unique(field_name: str, new_value: Optional[str]):
                 if new_value is None:
                     return
-                exists = db.query(User).filter(getattr(User, field_name) == new_value, User.id != user_id).first()
+                exists = db.query(User).filter(
+                    getattr(User, field_name) == new_value,
+                    User.id != (user_id_int if user_id_int is not None else user_id)
+                ).first()
                 if exists:
                     raise ValueError(f"{field_name} 已被占用")
 
@@ -317,13 +330,18 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def delete_user(self, db: Session, user_id: int, operator_id: Optional[int] = None, hard: bool = False) -> bool:
+    async def delete_user(self, db: Session, user_id: str, operator_id: Optional[str] = None, hard: bool = False) -> bool:
         """删除用户
         - 默认软删除：将用户状态置为 inactive
         - 硬删除(hard=True)：物理删除用户，并清理与用户相关的外键引用（置空）
         """
         try:
-            user = db.query(User).filter(User.id == user_id).first()
+            # 将字符串ID转换为整数以匹配 BigInteger 主键类型
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                user_id_int = None
+            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return False
 
@@ -338,13 +356,18 @@ class UserService(object):
                 return True
 
             # 硬删除：清理引用并物理删除
-            # 1) 清理会议记录中的 created_by / updated_by 引用
-            db.query(Meeting).filter(Meeting.created_by == user_id).update({Meeting.created_by: None})
-            db.query(Meeting).filter(Meeting.updated_by == user_id).update({Meeting.updated_by: None})
+            # 1) 清理会议记录中的 created_by / updated_by 引用（会议表中为 BigInteger）
+            if user_id_int is not None:
+                db.query(Meeting).filter(Meeting.created_by == user_id_int).update({Meeting.created_by: None})
+                db.query(Meeting).filter(Meeting.updated_by == user_id_int).update({Meeting.updated_by: None})
+            else:
+                # 回退：如果无法解析为整数，尽量以字符串比较（兼容异常数据）
+                db.query(Meeting).filter(Meeting.created_by == user_id).update({Meeting.created_by: None})
+                db.query(Meeting).filter(Meeting.updated_by == user_id).update({Meeting.updated_by: None})
 
-            # 2) 清理其他用户记录中的 created_by / updated_by 自引用
-            db.query(User).filter(User.created_by == user_id).update({User.created_by: None})
-            db.query(User).filter(User.updated_by == user_id).update({User.updated_by: None})
+            # 2) 清理其他用户记录中的 created_by / updated_by 自引用（用户表中为 String）
+            db.query(User).filter(User.created_by == str(user_id)).update({User.created_by: None})
+            db.query(User).filter(User.updated_by == str(user_id)).update({User.updated_by: None})
 
             # 3) 删除用户本身
             db.delete(user)
@@ -366,12 +389,17 @@ class UserService(object):
             logger.error(f"验证密码失败(user={user.id}): {e}")
             return False
 
-    async def change_user_status(self, db: Session, user_id: int, status: str, operator_id: Optional[int] = None) -> bool:
+    async def change_user_status(self, db: Session, user_id: str, status: str, operator_id: Optional[str] = None) -> bool:
         """修改用户状态：active / inactive / suspended"""
         try:
             if status not in [UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value]:
                 raise ValueError("非法的用户状态")
-            user = db.query(User).filter(User.id == user_id).first()
+            # 将字符串ID转换为整数以匹配 BigInteger 主键类型
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                user_id_int = None
+            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return False
             user.status = status
@@ -390,10 +418,15 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def reset_password(self, db: Session, user_id: int, operator_id: Optional[int] = None, default_password: str = "Test@1234") -> bool:
+    async def reset_password(self, db: Session, user_id: str, operator_id: Optional[str] = None, default_password: str = "Test@1234") -> bool:
         """重置用户密码为默认值（bcrypt加密），返回是否成功"""
         try:
-            user = db.query(User).filter(User.id == user_id).first()
+            # 将字符串ID转换为整数以匹配 BigInteger 主键类型
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                user_id_int = None
+            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return False
             # 生成新的密码哈希

@@ -129,6 +129,7 @@ manager = ConnectionManager()
 app.include_router(router.user_manage)
 app.include_router(router.meeting_manage)
 app.include_router(router.attendance_manage)
+app.include_router(router.message_manage)
 
 # 健康检查
 from router.health_check import router as health_router
