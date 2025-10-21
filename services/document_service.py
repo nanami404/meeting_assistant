@@ -24,7 +24,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 # 自定义库
-from .service_models import Meeting, Transcription
+from services.service_models import Meeting, Transcription
 
 
 TABLE_STYLE = 'Table Grid'
@@ -68,6 +68,7 @@ class DocumentService(object):
     async def generate_notification(self, meeting: Meeting):
         """Generate meeting notification document in both Word and PDF formats"""
         # Generate Word document
+        print("开始打印通知书")
         word_path = await self._generate_notification_word(meeting)
         # Generate PDF document
         pdf_path = await self._generate_notification_pdf(meeting)
@@ -118,7 +119,7 @@ class DocumentService(object):
                 row_cells = participants_table.add_row().cells
                 row_cells[0].text = participant.name
                 row_cells[1].text = participant.email
-                row_cells[2].text = self._translate_role(participant.role)
+                row_cells[2].text = self._translate_role(participant.user_role)
         # Add footer
         doc.add_paragraph('')
         footer = doc.add_paragraph('请及时确认参会状态，如有冲突请提前告知。')
@@ -250,7 +251,7 @@ class DocumentService(object):
                 participant_data.append([
                     participant.name,
                     participant.email,
-                    self._translate_role(participant.role)
+                    self._translate_role(participant.user_role)
                 ])
 
             participants_table = Table(participant_data, colWidths=[2 * inch, 2.5 * inch, 1.5 * inch])

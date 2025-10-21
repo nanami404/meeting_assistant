@@ -196,8 +196,10 @@ async def generate_notification(meeting_id: str, current_user: User = Depends(re
         生成会议通知文档
     """
     user_id = str(current_user.id)
+    print("当前用户ID",)
     try:
         meeting = await meeting_service.get_meeting(db, meeting_id, user_id)
+        print(meeting.title)
         if not meeting:
             raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
 
@@ -273,7 +275,6 @@ class TranslationBatch(BaseModel):
 
 
 # 后台任务：连接外部 wss 服务并接收消息
-@router.post("/{meeting_id}/translate_text_load")
 @router.post("/{meeting_id}/translate_text_load")
 async def translate_text_load(meeting_id: str, translate_text: str, speaker_name: str = None):
     """
