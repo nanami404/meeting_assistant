@@ -80,16 +80,11 @@ class MeetingService(object):
     async def get_meeting(self, db: Session, meeting_id: str, current_user_id: str) -> Optional[Meeting]:
         """Get a specific meeting by ID and validate user access using JOIN"""
         # 查询用户角色
-<<<<<<< HEAD
-
-        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
-=======
         try:
             current_user_id_int = int(current_user_id)
         except (TypeError, ValueError):
             current_user_id_int = None
         user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
->>>>>>> 3371874bcff454dd654e6ceb29980f6a6a6bf6aa
         query = db.query(Meeting)
         # 如果不是管理员，添加参与者验证条件
         if user_role != "admin":

@@ -174,13 +174,8 @@ async def get_meeting(meeting_id: str, current_user: User = Depends(require_auth
 @router.put("/{meeting_id}/user/", response_model=MeetingResponse)
 def update_meeting(meeting_id: str,  meeting: MeetingCreate,current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> MeetingResponse:
     """Update a meeting"""
-<<<<<<< HEAD
-    user_id = current_user.id
-    updated_meeting = meeting_service.update_meeting(db, meeting_id, meeting, user_id)
-=======
     user_id = str(current_user.id)
     updated_meeting = meeting_service.update_meeting(db, meeting_id, meeting,user_id)
->>>>>>> 3371874bcff454dd654e6ceb29980f6a6a6bf6aa
     if not updated_meeting:
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
     return updated_meeting
