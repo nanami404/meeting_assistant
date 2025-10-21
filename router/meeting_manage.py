@@ -73,7 +73,7 @@ async def root()->dict[str, str]:
     return {"message": "Meeting Assistant API is running"}
 
 # Meeting management endpoints
-@router.post("/", response_model=MeetingResponse)
+@router.post("/", summary="创建新会议", response_model=MeetingResponse)
 async def create_meeting(meeting: MeetingCreate, current_user: User = Depends(require_auth), db: Session = Depends(get_db)) ->MeetingResponse:
     """创建新会议
     Args:
@@ -121,9 +121,9 @@ async def create_meeting(meeting: MeetingCreate, current_user: User = Depends(re
             detail="服务器内部错误，创建会议失败"
         )
 
-@router.get("/user/", response_model=List[MeetingResponse])
+@router.get("/user/", summary="获取全部会议信息", response_model=List[MeetingResponse])
 async def get_meetings( current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> list[MeetingResponse]:
-    """Get all meetings"""
+    """获取全部会议信息"""
     user_id = str(current_user.id)
     try:
         # 验证 current_user_id 是否合法
@@ -142,9 +142,9 @@ async def get_meetings( current_user: User = Depends(require_auth), db: Session 
         logger.error(f"Failed to retrieve meetings for user: {user_id}, error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.get("/{meeting_id}/user/", response_model=MeetingResponse)
+@router.get("/{meeting_id}/user/", summary="获取单一会议信息", response_model=MeetingResponse)
 async def get_meeting(meeting_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db)) -> MeetingResponse:
-    """Get a specific meeting with user validation"""
+    """获取单一会议信息"""
     user_id = str(current_user.id)
     try:
         # 验证 user_id 是否合法
@@ -171,18 +171,18 @@ async def get_meeting(meeting_id: str, current_user: User = Depends(require_auth
         logger.error(f"Failed to retrieve meeting {meeting_id} for user: {user_id}, error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.put("/{meeting_id}/user/", response_model=MeetingResponse)
+@router.put("/{meeting_id}/user/",summary="更新会议信息", response_model=MeetingResponse)
 def update_meeting(meeting_id: str,  meeting: MeetingCreate,current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> MeetingResponse:
-    """Update a meeting"""
+    """更新会议信息"""
     user_id = str(current_user.id)
     updated_meeting = meeting_service.update_meeting(db, meeting_id, meeting,user_id)
     if not updated_meeting:
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
     return updated_meeting
 
-@router.delete("/{meeting_id}/user/")
+@router.delete("/{meeting_id}/user/", summary="删除指定会议信息")
 async def delete_meeting(meeting_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> dict[str, str]:
-    """Delete a meeting"""
+    """删除指定会议信息"""
     user_id = str(current_user.id)
     success = await meeting_service.delete_meeting(db, meeting_id,user_id)
     if not success:
@@ -190,11 +190,9 @@ async def delete_meeting(meeting_id: str, current_user: User = Depends(require_a
     return {"message": "Meeting deleted successfully"}
 
 # Document generation endpoints
-@router.post("/{meeting_id}/generate-notification")
+@router.post("/{meeting_id}/generate-notification", summary="生成会议通知文档")
 async def generate_notification(meeting_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
-    """Generate meeting notification document
-        生成会议通知文档
-    """
+    """生成会议通知文档"""
     user_id = str(current_user.id)
     print("当前用户ID",)
     try:
@@ -210,8 +208,7 @@ async def generate_notification(meeting_id: str, current_user: User = Depends(re
 
 @router.post("/{meeting_id}/generate-minutes")
 async def generate_minutes(meeting_id: str,current_user: User = Depends(require_auth),  db: Session = Depends(get_db)):
-    """Generate meeting minutes document
-       生成会议纪要文档
+    """生成会议纪要文档
     """
     user_id = str(current_user.id)
     try:

@@ -114,6 +114,7 @@ class PersonSign(Base):
     meeting_id = Column(String(50), ForeignKey("meetings.id"), nullable=False)
     is_signed = Column(Boolean, default=False)
     is_on_leave = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz), comment="创建时间")
 
 class Meeting(Base):
     __tablename__ = "meetings"

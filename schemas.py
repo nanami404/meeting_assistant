@@ -9,6 +9,7 @@ class ParticipantBase(BaseModel):
     email: EmailStr
     user_role: str = "participant"
     is_required: bool = True
+    created_at: datetime
 
 
 class ParticipantCreate(ParticipantBase):

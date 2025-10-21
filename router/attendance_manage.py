@@ -57,7 +57,7 @@ MEETING_NOT_FOUND_DETAIL = "Meeting not found"
 router = APIRouter(prefix="/api/attendance", tags=["SignIn"])
 
 # 获取当前所有人员的签到状态
-@router.get("/people", response_model=List[PersonSignResponse])
+@router.get("/people", summary="获取当前所有人员的签到状态", response_model=List[PersonSignResponse])
 async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)) -> List[PersonSignResponse]:
     """获取所有人员的签到状态"""
     try:
@@ -70,16 +70,16 @@ async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)) 
 # 签到接口
 @router.post("/sign")
 async def sign(
-    name: str,
     meeting_id: str,
-    current_user: User = Depends(require_auth),
+    current_user_id: str,
     db: Session = Depends(get_db)
 ):
     """人员签到接口"""
-    user_id = current_user.id
+    user_id = int(current_user_id)
+    user = db.query(User).filter(User.id == user_id).first()
     try:
         # 调用服务层的签到方法，传入姓名和数据库会话
-        result = await attendance_service.sign_person(db, name, meeting_id, str(user_id))
+        result = await attendance_service.sign_person(db, user.name, meeting_id, user_id)
         return result
     except ValueError as e:
         # 捕获服务层抛出的“未找到人员”异常
@@ -90,20 +90,21 @@ async def sign(
 
 @router.post("/leave")
 async def leave(
-    name: str,
     meeting_id: str,
-    current_user: User = Depends(require_auth),
+    current_user_id: str,
     db: Session = Depends(get_db)
 ):
     """
     人员请假接口（绑定会议维度）
     """
-    user_id = current_user.id
+    user_id = current_user_id
+    user = db.query(User).filter(User.id == user_id).first()
+    print("当前姓名是",user.name)
     try:
         # 调用服务层请假方法，传入姓名、会议ID和数据库会话
         result = await attendance_service.leave_person(
             db=db,
-            name=name,
+            name=user.name,
             meeting_id=meeting_id,
             user_id=str(user_id)
         )
