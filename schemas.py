@@ -6,6 +6,7 @@ import re
 
 class ParticipantBase(BaseModel):
     name: str
+    user_code: str
     email: EmailStr
     user_role: str = "participant"
     is_required: bool = True
