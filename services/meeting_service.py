@@ -65,9 +65,7 @@ class MeetingService(object):
 
         # 如果不是管理员，添加参与者过滤条件
         if user_role != "admin":
-            query = query.join(Participant, Meeting.id == Participant.meeting_id) \
-                .filter(Participant.user_code == current_user_id) \
-                .distinct()
+            query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(Participant.user_code == current_user_id).distinct()
 
         # 统一按时间排序
         query = query.order_by(Meeting.date_time.desc())
@@ -78,6 +76,7 @@ class MeetingService(object):
     async def get_meeting(self, db: Session, meeting_id: str, current_user_id: str) -> Optional[Meeting]:
         """Get a specific meeting by ID and validate user access using JOIN"""
         # 查询用户角色
+
         user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
         query = db.query(Meeting)
         # 如果不是管理员，添加参与者验证条件

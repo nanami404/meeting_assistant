@@ -122,7 +122,7 @@ async def create_meeting(meeting: MeetingCreate, current_user: User = Depends(re
         )
 
 @router.get("/user/", response_model=List[MeetingResponse])
-async def get_meetings(current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> list[MeetingResponse]:
+async def get_meetings( current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> list[MeetingResponse]:
     """Get all meetings"""
     user_id = current_user.id
     try:
@@ -175,7 +175,7 @@ async def get_meeting(meeting_id: str, current_user: User = Depends(require_auth
 def update_meeting(meeting_id: str,  meeting: MeetingCreate,current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> MeetingResponse:
     """Update a meeting"""
     user_id = current_user.id
-    updated_meeting = meeting_service.update_meeting(db, meeting_id, meeting,user_id)
+    updated_meeting = meeting_service.update_meeting(db, meeting_id, meeting, user_id)
     if not updated_meeting:
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
     return updated_meeting
@@ -257,256 +257,106 @@ EXTERNAL_ACCESS_TOKEN = "6c0a12ed344841859e486e46fbe1b881"
 
 
 # 消息模型
-class TextMessage(BaseModel):
-    type: str
-    content: str
-    sender: str = "anonymous"
+class TranslationItem(BaseModel):
+    text: str
+    source_lang: str
+    target_lang: str
+    translated_text: str
+    confidence: Optional[float] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+class TranslationBatch(BaseModel):
+    items: List[TranslationItem]
+    batch_id: Optional[str] = None
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 # 后台任务：连接外部 wss 服务并接收消息
-async def connect_external_wss(max_retries: Optional[int] = None, retry_delay: int = 5):
+@router.post("/translate_text_load")
+# 你的 WebSocket 端点（供客户端连接）
+async def translate_text_load(batch: TranslationBatch):
     """
-    连接外部 wss 服务，接收消息并广播给所有客户端
+    接收翻译文本数据并录入数据库
+
+    Args:
+        batch: 包含翻译项目的批量数据
+
+    Returns:
+        dict: 操作结果
     """
-    retry_count = 0
+    try:
+        db = next(get_db())
 
-    while max_retries is None or retry_count < max_retries:
-        try:
-            logger.info(f"🔄 尝试连接外部 WSS 服务 (第 {retry_count + 1} 次)...")
+        success_count = 0
+        error_count = 0
+        error_details = []
 
-            # 连接外部 wss 服务
-            async with websockets.connect(
-                    EXTERNAL_WSS_URL,
-                    additional_headers=[
-                        ("access-token", EXTERNAL_ACCESS_TOKEN),
-                        ("User-Agent", "WebSocket-Client/1.0")
-                    ],
-                    ping_interval=10,  # 更频繁的心跳
-                    ping_timeout=5,
-                    close_timeout=10,
-                    max_size=None,
-                    open_timeout=30
-            ) as external_ws:
-                logger.info(f"✅ 已连接到外部 wss 服务")
-                retry_count = 0
+        for index, item in enumerate(batch.items):
+            try:
+                # 生成唯一ID（实际项目中可以使用UUID）
+                record_id = f"trans_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{index}"
 
-                # 连接建立后立即发送初始消息
-                await send_initial_handshake(external_ws)
-
-                # 创建心跳任务
-                heartbeat_task = asyncio.create_task(
-                    send_heartbeat(external_ws)
+                # 创建翻译记录
+                translation_record = TranslationRecord(
+                    id=record_id,
+                    original_text=item.text,
+                    source_lang=item.source_lang,
+                    target_lang=item.target_lang,
+                    translated_text=item.translated_text,
+                    confidence=item.confidence,
+                    metadata=item.metadata,
+                    batch_id=batch.batch_id,
+                    user_id=batch.user_id,
+                    session_id=batch.session_id
                 )
 
-                try:
-                    # 监听消息直到连接关闭
-                    async for message in external_ws:
-                        try:
-                            logger.info(f"📨 从外部 wss 收到消息：{message}")
+                # 添加到数据库
+                db.add(translation_record)
+                success_count += 1
 
-                            # 处理消息
-                            processed_message = await process_external_message(message)
+            except Exception as e:
+                error_count += 1
+                error_details.append({
+                    "index": index,
+                    "error": str(e),
+                    "text_preview": item.text[:50] + "..." if len(item.text) > 50 else item.text
+                })
+                # 记录错误日志但继续处理其他项目
+                print(f"处理第 {index} 条记录时出错: {e}")
 
-                            # 转发给所有客户端
-                            if manager.connections:
-                                await manager.broadcast({
-                                    "type": "external_message",
-                                    "data": processed_message,
-                                    "timestamp": time.time()
-                                })
-                                logger.info("✅ 消息已广播给所有客户端")
+        # 提交事务
+        db.commit()
 
-                            # 发送确认消息（如果服务端需要 ack）
-                            await send_acknowledgment(external_ws, message)
-
-                        except Exception as msg_error:
-                            logger.error(f"❌ 处理消息时出错：{msg_error}", exc_info=True)
-
-                except ConnectionClosed as e:
-                    logger.warning(f"🔌 连接关闭：code={e.code}, reason={e.reason}")
-                    if e.code == 1013:
-                        logger.info("💡 服务端要求重连")
-                finally:
-                    # 取消心跳任务
-                    heartbeat_task.cancel()
-                    try:
-                        await heartbeat_task
-                    except asyncio.CancelledError:
-                        pass
-
-        except ConnectionClosed as e:
-            logger.warning(f"连接关闭：{e.code} - {e.reason}，{retry_delay}秒后重试...")
-
-        except asyncio.TimeoutError:
-            logger.error(f"连接超时，{retry_delay}秒后重试...")
-
-        except websockets.exceptions.WebSocketException as e:
-            logger.error(f"WebSocket 异常：{e}，{retry_delay}秒后重试...")
-
-        except asyncio.CancelledError:
-            logger.info("外部 wss 连接任务被取消")
-            raise
-
-        except Exception as e:
-            logger.error(f"外部 wss 连接错误：{e}，{retry_delay}秒后重试...", exc_info=True)
-
-        # 重试逻辑
-        retry_count += 1
-        if max_retries and retry_count >= max_retries:
-            logger.error(f"🛑 达到最大重试次数 {max_retries}，停止连接外部 wss 服务")
-            break
-
-        # 递增延迟
-        actual_delay = min(retry_delay * retry_count, 30)
-        logger.info(f"⏳ 第 {retry_count} 次重试，等待 {actual_delay} 秒...")
-        await asyncio.sleep(actual_delay)
-
-
-async def send_initial_handshake(websocket):
-    """发送初始握手消息"""
-    try:
-        # 根据 URL 参数构造初始消息
-        init_message = {
-            "type": "init",
-            "appid": "tainsureAssistant",
-            "uid": "555fd741-5023-4ea8-84ff-b702a087137b",
-            "ack": 1,
-            "pk_on": 1,
-            "timestamp": int(time.time()),
-            "action": "start"  # 可能需要开始动作
-        }
-
-        await websocket.send(json.dumps(init_message))
-        logger.info("📤 已发送初始握手消息")
-
-    except Exception as e:
-        logger.error(f"发送初始握手消息失败: {e}")
-
-
-async def send_heartbeat(websocket):
-    """发送心跳保持连接"""
-    try:
-        while True:
-            await asyncio.sleep(8)  # 每8秒发送一次心跳
-
-            heartbeat_msg = {
-                "type": "heartbeat",
-                "timestamp": int(time.time())
+        # 构建响应
+        response = {
+            "success": True,
+            "message": f"成功处理 {success_count} 条记录",
+            "statistics": {
+                "total_received": len(batch.items),
+                "success_count": success_count,
+                "error_count": error_count,
+                "batch_id": batch.batch_id
             }
-            await websocket.send(json.dumps(heartbeat_msg))
-            logger.debug("💓 心跳已发送")
-
-    except asyncio.CancelledError:
-        logger.debug("心跳任务被取消")
-    except Exception as e:
-        logger.error(f"发送心跳失败: {e}")
-
-
-async def send_acknowledgment(websocket, received_message):
-    """发送消息确认（如果需要）"""
-    try:
-        # 如果服务端需要确认，发送 ack
-        ack_message = {
-            "type": "ack",
-            "timestamp": int(time.time()),
-            "received": True
         }
-        await websocket.send(json.dumps(ack_message))
-        logger.debug("✅ 已发送消息确认")
+
+        # 如果有错误，包含错误详情
+        if error_count > 0:
+            response["error_details"] = error_details
+            response["message"] += f"，失败 {error_count} 条"
+
+        return response
 
     except Exception as e:
-        logger.debug(f"发送确认失败: {e}")
-
-
-async def process_external_message(message):
-    """处理外部消息"""
-    try:
-        parsed_message = json.loads(message)
-        # 可以根据消息类型进行不同的处理
-        message_type = parsed_message.get("type", "unknown")
-
-        if message_type == "transcript":
-            # 处理转写结果
-            return f"转写结果: {parsed_message.get('text', '')}"
-        elif message_type == "status":
-            # 处理状态消息
-            return f"状态更新: {parsed_message.get('status', '')}"
-        else:
-            return json.dumps(parsed_message, ensure_ascii=False)
-
-    except json.JSONDecodeError:
-        return message
-
-# 使用示例
-async def start_external_connection():
-    """启动外部连接任务"""
-    task = asyncio.create_task(
-        connect_external_wss(
-            max_retries=10,  # 最多重试10次
-            retry_delay=5  # 每次重试间隔5秒
+        # 如果发生全局错误，回滚事务
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"处理翻译数据时发生错误: {str(e)}"
         )
-    )
-    return task
+    finally:
+        db.close()
 
-# 优雅关闭函数
-async def stop_external_connection(task):
-    """停止外部连接任务"""
-    if task and not task.done():
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            logger.info("外部 wss 连接任务已取消")
-
-# 你的 WebSocket 端点（供客户端连接）
-@router.websocket("/ws/text/{meeting_id}")
-async def websocket_endpoint(websocket: WebSocket, meeting_id: str):
-    """
-    WebSocket 端点，处理客户端连接和消息转发
-    """
-
-    # 将客户端添加到连接管理器
-    await manager.connect(websocket,meeting_id)
-
-    # 启动外部 WSS 连接（如果尚未启动）
-    external_task = None
-    if not hasattr(manager, 'external_task') or manager.external_task is None or manager.external_task.done():
-        external_task = await start_external_connection()
-        manager.external_task = external_task  # 保存任务引用以便管理
-        logger.info("外部 WSS 连接已启动")
-
-    try:
-        while True:
-            # 接收客户端消息
-            client_data = await websocket.receive_text()
-            logger.info(f"收到客户端消息：{client_data}")
-
-            # 可选：向客户端发送确认消息
-            await websocket.send_json({
-                "type": "acknowledge",
-                "message": "消息已接收",
-                "timestamp": asyncio.get_event_loop().time()
-            })
-
-    except WebSocketDisconnect:
-        # 客户端主动断开连接
-        logger.info(f"客户端断开连接：{websocket.client}")
-        manager.disconnect(websocket, meeting_id)
-        # 如果这是最后一个客户端连接，可以考虑停止外部连接
-        if not manager.connections:
-            logger.info("所有客户端已断开，外部连接保持运行")
-
-    except Exception as e:
-        # 处理其他异常
-        logger.error(f"WebSocket 连接错误：{str(e)}", exc_info=True)
-
-        try:
-            # 尝试优雅关闭连接
-            await websocket.close(code=1011, reason=f"服务端错误：{str(e)}")
-        except Exception as close_error:
-            logger.error(f"关闭 WebSocket 时出错：{close_error}")
-        # 从连接管理器中移除
-        manager.disconnect(websocket)
 
 
 # Upload audio file for transcription
