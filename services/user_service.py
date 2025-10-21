@@ -38,6 +38,7 @@ class UserService(object):
 
             # 创建用户
             user = User(
+                id = str(uuid.uuid4()),
                 name=user_data.name,
                 user_name=user_data.user_name,
                 gender=user_data.gender,
@@ -211,7 +212,7 @@ class UserService(object):
         try:
             # 将字符串ID转换为整数以匹配 BigInteger 主键类型
             try:
-                user_id_int = int(user_id)
+                user_id_int = user_id
             except (TypeError, ValueError):
                 user_id_int = None
             query = db.query(User).filter(User.id == user_id_int) if user_id_int is not None else db.query(User).filter(User.id == user_id)
