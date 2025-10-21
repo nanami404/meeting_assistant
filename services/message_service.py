@@ -1,6 +1,6 @@
 from typing import List
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import select, func
 from loguru import logger
 from datetime import datetime
 from pytz import timezone
@@ -56,32 +56,63 @@ class MessageService(object):
         db.refresh(msg)
         return msg
 
-    async def list_messages(self, db: Session, recipient_id: str, only_unread: bool = False) -> list[Message]:
-        """查询用户收到的消息列表
+    async def list_messages(self, db: Session, recipient_id: str, only_unread: bool = False, page: int = 1, page_size: int = 20) -> tuple[list[Message], int]:
+        """查询用户收到的消息列表（分页）
         Args:
             db: 数据库会话
             recipient_id: 接收者用户ID（字符串），转换为 int 查询
             only_unread: 仅查询未读消息
+            page: 页码，从1开始
+            page_size: 每页数量
         Returns:
-            list[Message]: 消息列表（包含 recipients 关系）
+            tuple[list[Message], int]: (消息列表, 总条数)
         """
         try:
             rid_int = int(str(recipient_id))
         except (TypeError, ValueError):
             raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
 
-        q = (
-            select(Message)
-            .join(MessageRecipient, MessageRecipient.message_id == Message.id)
-            .options(joinedload(Message.recipients))
-            .where(MessageRecipient.recipient_id == rid_int)
-        )
+        # 构建过滤条件
+        conditions = [MessageRecipient.recipient_id == rid_int]
         if only_unread:
-            q = q.where(MessageRecipient.is_read == False)
+            conditions.append(MessageRecipient.is_read == False)
 
-        result = db.execute(q)
-        messages = result.scalars().all()
-        return messages
+        # 统计总数（去重消息ID）
+        count_q = (
+            select(func.count(func.distinct(Message.id)))
+            .join(MessageRecipient, MessageRecipient.message_id == Message.id)
+            .where(*conditions)
+        )
+        total = db.execute(count_q).scalar() or 0
+
+        # 计算偏移
+        offset = max(0, (page - 1) * page_size)
+
+        # 先分页获取消息ID，避免 join 集合导致分页偏差
+        ids_q = (
+            select(Message.id)
+            .join(MessageRecipient, MessageRecipient.message_id == Message.id)
+            .where(*conditions)
+            .group_by(Message.id)
+            .order_by(Message.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        id_rows = db.execute(ids_q).all()
+        ids = [row[0] for row in id_rows]
+
+        if not ids:
+            return [], total
+
+        # 再按ID查询具体消息，并选择式预加载 recipients（避免重复行）
+        data_q = (
+            select(Message)
+            .where(Message.id.in_(ids))
+            .options(selectinload(Message.recipients))
+            .order_by(Message.created_at.desc())
+        )
+        messages = db.execute(data_q).scalars().all()
+        return messages, total
 
     async def mark_read(self, db: Session, message_id: str, recipient_id: str) -> bool:
         """标记某条消息为已读

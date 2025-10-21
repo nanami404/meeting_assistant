@@ -67,13 +67,29 @@ async def send_message(payload: MessageCreate, db: Session = Depends(get_db), cu
 
 @router.get("/list", summary="查询我的消息", response_model=dict)
 async def list_my_messages(
-    only_unread: bool = Query(default=False, description="是否仅查询未读消息"),
+    page: int = Query(default=1, ge=1, description="页码，从1开始"),
+    page_size: int = Query(default=20, ge=1, le=100, description="每页数量，最大100"),
+    only_unread: bool | None = Query(default=None, description="是否仅查询未读消息"),
+    is_read: bool | None = Query(default=None, description="是否已读（用于兼容现有调用）"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_auth),
 ):
-    """查询当前用户收到的消息"""
+    """查询当前用户收到的消息（支持分页）"""
     try:
-        messages = await message_service.list_messages(db, recipient_id=str(current_user.id), only_unread=only_unread)
+        # 兼容 is_read=false 的调用方式：当 is_read 提供时，以其为准
+        if is_read is not None:
+            only_unread_effective = (not is_read)
+        else:
+            only_unread_effective = bool(only_unread) if only_unread is not None else False
+
+        messages, total = await message_service.list_messages(
+            db,
+            recipient_id=str(current_user.id),
+            only_unread=only_unread_effective,
+            page=page,
+            page_size=page_size,
+        )
+
         results: List[dict] = []
         for m in messages:
             recipients = [
@@ -90,7 +106,20 @@ async def list_my_messages(
                 recipients=recipients,
             )
             results.append(data.dict())
-        return _resp(results)
+
+        total_pages = (total + page_size - 1) // page_size
+        has_next = page < total_pages
+        has_prev = page > 1
+
+        return _resp({
+            "items": results,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "has_next": has_next,
+            "has_prev": has_prev,
+        })
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
