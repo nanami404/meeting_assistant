@@ -53,7 +53,7 @@ class User(Base):
     __tablename__ = "users"
 
     # 主键字段
-    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="用户主键ID（自增）")
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), comment="用户主键ID（UUID）")
     # 基本信息字段
     name = Column(String(100), nullable=False, comment="用户姓名")
     user_name = Column(String(50), nullable=False, unique=True, comment="用户账号")
