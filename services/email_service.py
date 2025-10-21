@@ -11,16 +11,16 @@ from email import encoders
 from jinja2 import Template
 
 #自定义库
-from .service_models import Meeting
+from services.service_models import Meeting
 
 
 class EmailService(object):
     def __init__(self) -> None:
         # Email configuration - these should be set as environment variables
-        self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-        self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
-        self.email_user = os.getenv('EMAIL_USER', '')
-        self.email_password = os.getenv('EMAIL_PASSWORD', '')
+        self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.163.com')  # 163邮箱服务器
+        self.smtp_port = int(os.getenv('SMTP_PORT', '465'))  # 163邮箱SSL端口
+        self.email_user = os.getenv('EMAIL_USER', '')  # 完整的163邮箱地址
+        self.email_password = os.getenv('EMAIL_PASSWORD', '')  # 163邮箱授权码
         self.from_email = os.getenv('FROM_EMAIL', self.email_user)
 
     async def send_meeting_notification(self, meeting: Meeting) -> bool:

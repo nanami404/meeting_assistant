@@ -11,7 +11,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 
 # 自定义库
-from .service_models import Meeting
+from services.service_models import Meeting
 
 logger = logging.getLogger(__name__)
 
