@@ -140,3 +140,41 @@ async def mark_read(message_id: str, db: Session = Depends(get_db), current_user
     except Exception as e:
         logger.error(f"标记已读异常: {e}")
         raise HTTPException(status_code=500, detail="服务器内部错误")
+
+
+@router.delete("/delete", summary="删除当前用户与消息的关联(仅删除关联表)", response_model=dict)
+async def delete_message_links(
+    is_read: bool | None = Query(default=None, description="按已读/未读状态删除；不传表示不限"),
+    message_id: str | None = Query(default=None, description="指定消息ID；与 is_read 可组合过滤"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auth),
+):
+    """安全删除当前用户与消息的关联关系
+    - 仅删除关联表 `message_recipients` 中当前用户相关记录
+    - 不删除 `messages` 表中的实际消息数据
+    - 为避免误删，要求至少提供 `is_read` 或 `message_id` 之一
+    """
+    try:
+        if is_read is None and message_id is None:
+            raise HTTPException(status_code=400, detail="必须提供 is_read 或 message_id 之一")
+
+        deleted = await message_service.delete_message_links(
+            db=db,
+            recipient_id=str(current_user.id),
+            is_read=is_read,
+            message_id=message_id,
+        )
+        return _resp({
+            "deleted": deleted,
+            "filters": {
+                "is_read": is_read,
+                "message_id": message_id,
+            }
+        }, message="删除关联成功")
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"删除消息关联异常: {e}")
+        raise HTTPException(status_code=500, detail="服务器内部错误")

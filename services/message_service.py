@@ -142,3 +142,38 @@ class MessageService(object):
         mr.read_at = datetime.now(shanghai_tz)
         db.commit()
         return True
+
+    async def delete_message_links(self, db: Session, recipient_id: str, is_read: bool | None = None, message_id: str | None = None) -> int:
+        """删除消息与当前用户的关联（仅删除关联表数据）
+        Args:
+            db: 数据库会话
+            recipient_id: 当前用户ID（字符串）
+            is_read: 根据阅读状态过滤删除（True=已读, False=未读, None=不限）
+            message_id: 指定要删除关联的消息ID（可选）
+        Returns:
+            int: 删除的关联记录数量
+        """
+        try:
+            rid_int = int(str(recipient_id))
+        except (TypeError, ValueError):
+            raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
+
+        conditions = [MessageRecipient.recipient_id == rid_int]
+        if is_read is not None:
+            conditions.append(MessageRecipient.is_read == bool(is_read))
+        if message_id is not None:
+            try:
+                mid_int = int(str(message_id))
+                conditions.append(MessageRecipient.message_id == mid_int)
+            except (TypeError, ValueError):
+                raise ValueError("message_id 必须是数字或可转换为数字的字符串")
+
+        # 为了操作安全性：至少需要一个过滤条件（is_read 或 message_id）
+        if len(conditions) == 1:
+            # 只有 recipient_id 这一条件，可能误删全部关联，阻止操作
+            raise ValueError("必须提供 is_read 或 message_id 之一，以限制删除范围")
+
+        # 执行删除，仅影响关联表，不触碰 messages 表
+        deleted = db.query(MessageRecipient).filter(*conditions).delete(synchronize_session=False)
+        db.commit()
+        return int(deleted)
