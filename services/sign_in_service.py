@@ -62,7 +62,7 @@ class SignInService(object):
             # 错误修正：创建 PersonSign（数据库模型）实例，而非 PersonSignCreate（Pydantic模型）
             user_meeting_sign = PersonSign(
                 name=name,
-                user_code=user_id,
+                user_code=int(user_id) if user_id is not None else None,
                 meeting_id=meeting_id,
                 is_signed=False,  # 初始未签到
                 is_on_leave=False  # 初始未请假
@@ -92,7 +92,7 @@ class SignInService(object):
             "is_signed": user_meeting_sign.is_signed
         }
 
-    async def leave_person(self, db: Session, name: str, meeting_id: str, user_id: int) -> Dict[str, str]:
+    async def leave_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> Dict[str, str]:
         """
         处理指定会议的人员请假逻辑
         :param db: 数据库会话
@@ -127,7 +127,7 @@ class SignInService(object):
             user_meeting = PersonSign(
                 name=name,
                 meeting_id=meeting_id,
-                user_code=user_id,
+                user_code=int(user_id) if user_id is not None else None,
                 is_signed=False,
                 is_on_leave=False
             )

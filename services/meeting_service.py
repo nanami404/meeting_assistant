@@ -45,7 +45,7 @@ class MeetingService(object):
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
                 name=participant_data.name,
-                user_code=user.id,
+                user_code=str(user.id),
                 email=participant_data.email,
                 user_role=participant_data.user_role,
                 is_required=participant_data.is_required
@@ -59,7 +59,11 @@ class MeetingService(object):
     async def get_meetings(self, db: Session, current_user_id: str) -> list[Meeting]:
         """Get all meetings - admin users see all, regular users see only their meetings"""
         # 查询用户角色
-        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
+        try:
+            current_user_id_int = int(current_user_id)
+        except (TypeError, ValueError):
+            current_user_id_int = None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
 
         query = db.query(Meeting)
 
@@ -78,7 +82,11 @@ class MeetingService(object):
     async def get_meeting(self, db: Session, meeting_id: str, current_user_id: str) -> Optional[Meeting]:
         """Get a specific meeting by ID and validate user access using JOIN"""
         # 查询用户角色
-        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
+        try:
+            current_user_id_int = int(current_user_id)
+        except (TypeError, ValueError):
+            current_user_id_int = None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
         query = db.query(Meeting)
         # 如果不是管理员，添加参与者验证条件
         if user_role != "admin":
@@ -93,7 +101,11 @@ class MeetingService(object):
         """Update a meeting"""
         from time import timezone
         # 查询用户角色
-        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
+        try:
+            current_user_id_int = int(current_user_id)
+        except (TypeError, ValueError):
+            current_user_id_int = None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
         query = db.query(Meeting)
         print("当前角色", user_role)
         if user_role != "admin":
@@ -122,7 +134,7 @@ class MeetingService(object):
             participant = Participant(
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
-                user_code=user.id,
+                user_code=str(user.id),
                 name=participant_data.name,
                 email=participant_data.email,
                 user_role=participant_data.user_role,
@@ -137,7 +149,11 @@ class MeetingService(object):
     async def delete_meeting(self, db: Session, meeting_id: str, current_user_id: str) -> bool:
         """Delete a meeting"""
         # 查询用户角色
-        user_role = db.query(User.user_role).filter(User.id == current_user_id).scalar()
+        try:
+            current_user_id_int = int(current_user_id)
+        except (TypeError, ValueError):
+            current_user_id_int = None
+        user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
         query = db.query(Meeting)
         if user_role != "admin":
             query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(

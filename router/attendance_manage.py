@@ -79,7 +79,7 @@ async def sign(
     user_id = current_user.id
     try:
         # 调用服务层的签到方法，传入姓名和数据库会话
-        result = await attendance_service.sign_person(db, name, meeting_id,user_id)
+        result = await attendance_service.sign_person(db, name, meeting_id, str(user_id))
         return result
     except ValueError as e:
         # 捕获服务层抛出的“未找到人员”异常
@@ -105,7 +105,7 @@ async def leave(
             db=db,
             name=name,
             meeting_id=meeting_id,
-            user_id=user_id
+            user_id=str(user_id)
         )
         return result
     except HTTPException as e:

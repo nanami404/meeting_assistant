@@ -85,7 +85,7 @@ async def create_meeting(meeting: MeetingCreate, current_user: User = Depends(re
         HTTPException: 400 - 输入数据无效
         HTTPException: 500 - 服务器内部错误
     """
-    user_id = current_user.id
+    user_id = str(current_user.id)
     try:
         # 开始数据库事务
         db.begin()
@@ -124,10 +124,10 @@ async def create_meeting(meeting: MeetingCreate, current_user: User = Depends(re
 @router.get("/user/", response_model=List[MeetingResponse])
 async def get_meetings(current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> list[MeetingResponse]:
     """Get all meetings"""
-    user_id = current_user.id
+    user_id = str(current_user.id)
     try:
         # 验证 current_user_id 是否合法
-        if not user_id or not isinstance(user_id, str):
+        if not user_id:
             raise HTTPException(status_code=400, detail="Invalid user ID")
 
         # 获取会议列表
@@ -145,10 +145,10 @@ async def get_meetings(current_user: User = Depends(require_auth), db: Session =
 @router.get("/{meeting_id}/user/", response_model=MeetingResponse)
 async def get_meeting(meeting_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db)) -> MeetingResponse:
     """Get a specific meeting with user validation"""
-    user_id = current_user.id
+    user_id = str(current_user.id)
     try:
         # 验证 user_id 是否合法
-        if not user_id or not isinstance(user_id, str):
+        if not user_id:
             raise HTTPException(status_code=400, detail="Invalid user ID")
 
         # 验证 meeting_id 是否合法
@@ -174,7 +174,7 @@ async def get_meeting(meeting_id: str, current_user: User = Depends(require_auth
 @router.put("/{meeting_id}/user/", response_model=MeetingResponse)
 def update_meeting(meeting_id: str,  meeting: MeetingCreate,current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> MeetingResponse:
     """Update a meeting"""
-    user_id = current_user.id
+    user_id = str(current_user.id)
     updated_meeting = meeting_service.update_meeting(db, meeting_id, meeting,user_id)
     if not updated_meeting:
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
@@ -183,7 +183,7 @@ def update_meeting(meeting_id: str,  meeting: MeetingCreate,current_user: User =
 @router.delete("/{meeting_id}/user/")
 async def delete_meeting(meeting_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> dict[str, str]:
     """Delete a meeting"""
-    user_id = current_user.id
+    user_id = str(current_user.id)
     success = await meeting_service.delete_meeting(db, meeting_id,user_id)
     if not success:
         raise HTTPException(status_code=404, detail=MEETING_NOT_FOUND_DETAIL)
@@ -195,7 +195,7 @@ async def generate_notification(meeting_id: str, current_user: User = Depends(re
     """Generate meeting notification document
         生成会议通知文档
     """
-    user_id = current_user.id
+    user_id = str(current_user.id)
     try:
         meeting = await meeting_service.get_meeting(db, meeting_id, user_id)
         if not meeting:
@@ -211,7 +211,7 @@ async def generate_minutes(meeting_id: str,current_user: User = Depends(require_
     """Generate meeting minutes document
        生成会议纪要文档
     """
-    user_id = current_user.id
+    user_id = str(current_user.id)
     try:
         meeting = await meeting_service.get_meeting(db, meeting_id, user_id)
         if not meeting:

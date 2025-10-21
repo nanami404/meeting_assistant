@@ -39,6 +39,9 @@ class PersonSignResponse(BaseModel):
     is_signed: bool
     is_on_leave: bool
 
+    class Config:
+        from_attributes = True
+
 class MeetingBase(BaseModel):
     title: str
     description: Optional[str] = None
@@ -280,11 +283,11 @@ class UserResponse(UserBase):
         updated_by: 更新者用户ID，可选
     """
     user_name: str = Field(..., min_length=3, max_length=50, description="用户账号")
-    id: int = Field(..., description="用户唯一标识")
+    id: str = Field(..., description="用户唯一标识")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
-    created_by: Optional[int] = Field(None, description="创建者用户ID")
-    updated_by: Optional[int] = Field(None, description="更新者用户ID")
+    created_by: Optional[str] = Field(None, description="创建者用户ID")
+    updated_by: Optional[str] = Field(None, description="更新者用户ID")
 
     class Config:
         from_attributes = True
@@ -305,7 +308,7 @@ class UserBasicResponse(BaseModel):
         company: 部门/单位名称
         email: 邮箱地址
     """
-    id: int = Field(..., description="用户唯一标识")
+    id: str = Field(..., description="用户唯一标识")
     name: str = Field(..., description="用户姓名")
     user_name: str = Field(..., description="用户账号")
     phone: Optional[str] = Field(None, description="手机号码")
@@ -354,3 +357,28 @@ class UserLogin(BaseModel):
             raise ValueError('用户名格式不正确，支持用户名（字母数字下划线）、邮箱地址或手机号码')
         
         return v
+
+
+class MessageCreate(BaseModel):
+    title: str
+    content: str
+    # 接收者ID列表，使用字符串以兼容现有路由传递的字符串ID
+    recipient_ids: List[str]
+
+
+class MessageRecipientResponse(BaseModel):
+    recipient_id: str
+    is_read: bool
+    read_at: Optional[datetime] = None
+
+
+class MessageResponse(BaseModel):
+    id: int
+    title: str
+    content: str
+    sender_id: str
+    created_at: datetime
+    recipients: List[MessageRecipientResponse] = []
+
+    class Config:
+        from_attributes = True

@@ -3,7 +3,6 @@
 -- 版本: 1.1.0
 -- 创建日期: 2024-09-26
 -- 描述: 基于User SQLAlchemy模型创建的用户管理表结构（仅包含基础结构）
--- 注意: 外键约束和检查约束将在应用层实现
 -- =================================================================
 
 -- 设置字符集和SQL模式
@@ -18,7 +17,7 @@ SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVIS
 DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
     -- 主键字段
-    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户ID主键（自增）',
+    `id` VARCHAR(255) NOT NULL COMMENT '用户ID主键（字符串类型）',
 
     -- 基本信息字段
     `name` VARCHAR(100) NOT NULL COMMENT '用户姓名',
@@ -40,8 +39,8 @@ CREATE TABLE `users` (
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
 
     -- 关联字段
-    `created_by` BIGINT DEFAULT NULL COMMENT '创建者用户ID',
-    `updated_by` BIGINT DEFAULT NULL COMMENT '更新者用户ID',
+    `created_by` VARCHAR(255) DEFAULT NULL COMMENT '创建者用户ID',
+    `updated_by` VARCHAR(255) DEFAULT NULL COMMENT '更新者用户ID',
 
     -- 主键约束
     PRIMARY KEY (`id`),
@@ -52,7 +51,7 @@ CREATE TABLE `users` (
     -- 普通索引（对应SQLAlchemy的Index定义）
     KEY `idx_users_user_name` (`user_name`),
     KEY `idx_users_role` (`user_role`),
-    KEY `idx_users_status` (`status`),
+    KEY `idx_users_status` (`status`)
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户信息表';
 
@@ -66,8 +65,8 @@ SET @sql = IF(
      AND TABLE_NAME = 'meetings'
      AND COLUMN_NAME = 'created_by') = 0,
     'ALTER TABLE `meetings`
-     ADD COLUMN `created_by` BIGINT DEFAULT NULL COMMENT "创建者用户ID" AFTER `updated_at`,
-     ADD COLUMN `updated_by` BIGINT DEFAULT NULL COMMENT "更新者用户ID" AFTER `created_by`,
+     ADD COLUMN `created_by` VARCHAR(255) DEFAULT NULL COMMENT "创建者用户ID" AFTER `updated_at`,
+     ADD COLUMN `updated_by` VARCHAR(255) DEFAULT NULL COMMENT "更新者用户ID" AFTER `created_by`,
      ADD KEY `idx_meetings_created_by` (`created_by`),
      ADD KEY `idx_meetings_updated_by` (`updated_by`)',
     'SELECT "meetings表用户字段已存在" as message'
@@ -77,13 +76,12 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-
-
 -- =================================================================
 -- 4. 插入初始用户数据
 -- =================================================================
 -- 插入系统管理员（如果不存在）
 INSERT IGNORE INTO `users` (
+    `id`,
     `name`,
     `user_name`,
     `email`,
@@ -93,6 +91,7 @@ INSERT IGNORE INTO `users` (
     `created_at`,
     `updated_at`
 ) VALUES (
+    '1',
     '系统管理员',
     'admin',
     'admin@meeting-system.com',
@@ -105,6 +104,7 @@ INSERT IGNORE INTO `users` (
 
 -- 插入测试普通用户（如果不存在）
 INSERT IGNORE INTO `users` (
+    `id`,
     `name`,
     `user_name`,
     `email`,
@@ -118,6 +118,7 @@ INSERT IGNORE INTO `users` (
     `created_at`,
     `updated_at`
 ) VALUES (
+    '2',
     '测试用户',
     'demo_user',
     'demo@meeting-system.com',
@@ -127,12 +128,10 @@ INSERT IGNORE INTO `users` (
     'user',
     'active',
     '$2b$12$dqxaCN4B14D9jOolnaI1rujOK.ho/g4lLtSqZ4VKSjyJy7lgxT6F6', -- 默认密码: 123456
-    1, -- 引用系统管理员的ID（自增ID为1）
+    '1', -- 引用系统管理员的ID（此处UUID假设为'1'，可以调整为系统生成的UUID）
     NOW(),
     NOW()
 );
-
-
 
 -- 重新启用外键检查
 SET FOREIGN_KEY_CHECKS = 1;
