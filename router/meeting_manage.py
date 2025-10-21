@@ -43,7 +43,7 @@ from services.speech_service import SpeechService
 from services.email_service import EmailService
 from services.auth_dependencies import require_auth, require_admin
 
-from services.service_models import User, UserStatus, UserRole
+from services.service_models import User, UserStatus, UserRole, TranslationText
 from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
 
 # 定义 Token 验证方案（Bearer Token）
@@ -273,89 +273,78 @@ class TranslationBatch(BaseModel):
 
 
 # 后台任务：连接外部 wss 服务并接收消息
-@router.post("/translate_text_load")
-# 你的 WebSocket 端点（供客户端连接）
-async def translate_text_load(batch: TranslationBatch):
+@router.post("/{meeting_id}/translate_text_load")
+@router.post("/{meeting_id}/translate_text_load")
+async def translate_text_load(meeting_id: str, translate_text: str, speaker_name: str = None):
     """
     接收翻译文本数据并录入数据库
 
     Args:
-        batch: 包含翻译项目的批量数据
+        meeting_id: 会议ID
+        translate_text: 翻译文本内容
+        speaker_name: 说话人姓名（可选）
 
     Returns:
         dict: 操作结果
     """
+    db = None
     try:
         db = next(get_db())
 
-        success_count = 0
-        error_count = 0
-        error_details = []
+        # 验证输入参数
+        if not meeting_id or not meeting_id.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="会议ID不能为空"
+            )
 
-        for index, item in enumerate(batch.items):
-            try:
-                # 生成唯一ID（实际项目中可以使用UUID）
-                record_id = f"trans_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{index}"
+        if not translate_text or not translate_text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="翻译文本不能为空"
+            )
 
-                # 创建翻译记录
-                translation_record = TranslationRecord(
-                    id=record_id,
-                    original_text=item.text,
-                    source_lang=item.source_lang,
-                    target_lang=item.target_lang,
-                    translated_text=item.translated_text,
-                    confidence=item.confidence,
-                    metadata=item.metadata,
-                    batch_id=batch.batch_id,
-                    user_id=batch.user_id,
-                    session_id=batch.session_id
-                )
+        # 创建新的翻译文本记录
+        translation_record = TranslationText(
+            meeting_id=meeting_id.strip(),
+            speaker_name=speaker_name.strip() if speaker_name else None,
+            text=translate_text.strip(),
+            created_time=datetime.utcnow()
+        )
 
-                # 添加到数据库
-                db.add(translation_record)
-                success_count += 1
-
-            except Exception as e:
-                error_count += 1
-                error_details.append({
-                    "index": index,
-                    "error": str(e),
-                    "text_preview": item.text[:50] + "..." if len(item.text) > 50 else item.text
-                })
-                # 记录错误日志但继续处理其他项目
-                print(f"处理第 {index} 条记录时出错: {e}")
-
-        # 提交事务
+        # 添加到数据库
+        db.add(translation_record)
         db.commit()
+        db.refresh(translation_record)
 
-        # 构建响应
-        response = {
-            "success": True,
-            "message": f"成功处理 {success_count} 条记录",
-            "statistics": {
-                "total_received": len(batch.items),
-                "success_count": success_count,
-                "error_count": error_count,
-                "batch_id": batch.batch_id
+        logger.info(f"成功保存翻译文本，会议ID: {meeting_id}, 记录ID: {translation_record.id}")
+
+        return {
+            "code": 200,
+            "message": "翻译文本保存成功",
+            "data": {
+                "id": translation_record.id,
+                "meeting_id": translation_record.meeting_id,
+                "speaker_name": translation_record.speaker_name,
+                "created_time": translation_record.created_time.isoformat()
             }
         }
 
-        # 如果有错误，包含错误详情
-        if error_count > 0:
-            response["error_details"] = error_details
-            response["message"] += f"，失败 {error_count} 条"
-
-        return response
-
+    except HTTPException:
+        # 重新抛出已知的HTTP异常
+        raise
     except Exception as e:
         # 如果发生全局错误，回滚事务
-        db.rollback()
+        if db:
+            db.rollback()
+        logger.error(f"保存翻译文本时发生错误 - 会议ID: {meeting_id}, 错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"处理翻译数据时发生错误: {str(e)}"
         )
     finally:
-        db.close()
+        if db:
+            db.close()
 
 
 

@@ -41,6 +41,15 @@ class UserStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
+class TranslationText(Base):
+    __tablename__ = "translation_texts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    meeting_id = Column(String(100), nullable=False, index=True)
+    speaker_name = Column(String(100), nullable=True)  # 如果没有说话人信息可以设为可选
+    text = Column(Text, nullable=False)  # 使用Text类型存储长文本
+    created_time = Column(DateTime, default=datetime.utcnow)
+
 class GenderType(str, Enum):
     """性别类型枚举"""
     MALE = "male"
