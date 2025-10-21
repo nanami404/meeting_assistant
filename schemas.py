@@ -4,6 +4,22 @@ from typing import List, Optional
 import re
 
 
+# 新增附件模型
+class Attachment(BaseModel):
+    id: str
+    meeting_id: str
+    file_name: str
+    file_path: str
+    file_size: int
+    content_type: str
+    uploaded_at: datetime
+
+class AttachmentCreate(BaseModel):
+    file_name: str
+    file_path: str
+    file_size: int
+    content_type: str
+
 class ParticipantBase(BaseModel):
     name: str
     user_code: str
@@ -55,6 +71,7 @@ class MeetingBase(BaseModel):
 
 class MeetingCreate(MeetingBase):
     participants: List[ParticipantCreate] = []
+    attachments: List[AttachmentCreate] = []
 
 
 class MeetingResponse(MeetingBase):

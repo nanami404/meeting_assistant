@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
 # 自定义类
-from .service_models import Meeting, Participant, Transcription, PersonSign, User
-from schemas import MeetingCreate,TranscriptionCreate, PersonSignCreate
+from services.service_models import Meeting, Participant, Transcription, PersonSign, User
+from schemas import MeetingCreate, TranscriptionCreate, AttachmentCreate, Attachment
 
 
 class MeetingService(object):
@@ -34,27 +34,37 @@ class MeetingService(object):
         db.flush()
         # Create participants
         for participant_data in meeting_data.participants:
-            # 根据参与者name查询users表，获取对应的user_id（users.id）
-            user = db.query(User).filter(User.name == participant_data.name,
-                                         User.email==participant_data.email).first()
-
-            # 如果未找到对应用户，可根据业务需求处理（此处示例为抛出异常）
+            # 根据姓名从users表查询用户
+            user = db.query(User).filter(User.name == participant_data.name).first()
             if not user:
-                raise ValueError(f"User with name '{participant_data.name}' not found in users table")
+                # 处理用户不存在的情况（根据业务需求选择抛错或跳过）
+                raise ValueError(f"用户 '{participant_data.name}' 不存在，请检查姓名是否正确")
             participant = Participant(
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
+                user_code=user.id,
                 name=participant_data.name,
-                user_code=str(user.id),
                 email=participant_data.email,
-                user_role=participant_data.user_role,
+                role=participant_data.role,
                 is_required=participant_data.is_required
             )
             db.add(participant)
+
+        # 处理附件
+        for attachment_data in meeting_data.attachments:
+            attachment = Attachment(
+                id=str(uuid.uuid4()),
+                meeting_id=meeting.id,
+                file_name=attachment_data.file_name,
+                file_path=attachment_data.file_path,
+                file_size=attachment_data.file_size,
+                content_type=attachment_data.content_type,
+                uploaded_at=datetime.now()
+            )
+            db.add(attachment)
         db.commit()
         db.refresh(meeting)
         return meeting
-
 
     async def get_meetings(self, db: Session, current_user_id: str) -> list[Meeting]:
         """Get all meetings - admin users see all, regular users see only their meetings"""
