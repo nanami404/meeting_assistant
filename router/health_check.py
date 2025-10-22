@@ -1,7 +1,5 @@
 # 标准库
 from fastapi.routing import APIRouter
-
-
 from typing import Dict, Any
 
 # 第三方库
@@ -13,13 +11,13 @@ router: APIRouter = APIRouter(prefix="/api/v1/health", tags=["健康检查"])
 
 
 @router.get(path="/", summary="系统健康检查", description="检查系统各组件的健康状态")
-async def system_health_check() -> Dict[str, Any]:
+async def system_health_check() -> dict[str, Any]:
     """系统整体健康检查
-    
+
     检查系统各个组件的健康状态，包括：
     - 数据库连接状态
     - 应用基本信息
-    
+
     Returns:
         Dict[str, Any]: 系统健康状态信息
     """
@@ -42,12 +40,11 @@ async def system_health_check() -> Dict[str, Any]:
                 }
             }
         }
-        
+
         health_status["message"] = "所有服务运行正常"
-        
         logger.info(f"系统健康检查完成 - 状态: {health_status['status']}")
         return health_status
-        
+
     except Exception as e:
         logger.error(f"系统健康检查失败: {e}")
         raise HTTPException(
@@ -57,11 +54,10 @@ async def system_health_check() -> Dict[str, Any]:
 
 
 @router.get(path="/ping", summary="简单健康检查", description="最简单的健康检查端点")
-async def ping() -> Dict[str, str]:
+async def ping() -> dict[str, str]:
     """简单的ping检查
-    
+
     最基础的健康检查端点，用于快速验证API服务是否可用。
-    
     Returns:
         Dict[str, str]: 简单的响应消息
     """

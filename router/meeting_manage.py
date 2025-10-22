@@ -8,31 +8,19 @@ from typing import List
 from typing import Generator
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote_plus
 import pytz
 from loguru import logger
 from httpx import AsyncClient
-from builtins import anext
 from typing import Any, Dict,Optional
-import time
 
 #第三方库
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydub import AudioSegment
 from pydantic import BaseModel
-import json
-import asyncio
-import websockets  # 新增：异步 WebSocket 客户端库
-from websockets.exceptions import ConnectionClosed
-
 
 from fastapi import  UploadFile, File
 from fastapi import APIRouter,HTTPException, Depends
-from fastapi import WebSocket, WebSocketDisconnect, WebSocketException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 
 #自定义库
 from db.databases import DatabaseConfig, DatabaseSessionManager
@@ -41,10 +29,10 @@ from services.meeting_service import MeetingService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
-from services.auth_dependencies import require_auth, require_admin
+from services.auth_dependencies import require_auth
 
-from services.service_models import User, UserStatus, UserRole, TranslationText
-from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
+from services.service_models import User,  TranslationText
+from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate
 
 # 定义 Token 验证方案（Bearer Token）
 security = HTTPBearer()
@@ -66,7 +54,7 @@ MEETING_NOT_FOUND_DETAIL = "Meeting not found"
 db_config = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
 get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session  #
+get_async_db = db_manager.get_async_session
 
 @router.get("/open")
 async def root()->dict[str, str]:
@@ -74,7 +62,8 @@ async def root()->dict[str, str]:
 
 # Meeting management endpoints
 @router.post("/", summary="创建新会议", response_model=MeetingResponse)
-async def create_meeting(meeting: MeetingCreate, current_user: User = Depends(require_auth), db: Session = Depends(get_db)) ->MeetingResponse:
+async def create_meeting(meeting: MeetingCreate,
+                         current_user: User = Depends(require_auth), db: Session = Depends(get_db)) ->MeetingResponse:
     """创建新会议
     Args:
         meeting (MeetingCreate): 会议创建数据，已通过Pydantic验证
@@ -122,7 +111,8 @@ async def create_meeting(meeting: MeetingCreate, current_user: User = Depends(re
         )
 
 @router.get("/user/", summary="获取全部会议信息", response_model=List[MeetingResponse])
-async def get_meetings( current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> list[MeetingResponse]:
+async def get_meetings( current_user: User = Depends(require_auth),
+                        db: Session = Depends(get_db))-> list[MeetingResponse]:
     """获取全部会议信息"""
     user_id = str(current_user.id)
     try:
@@ -143,7 +133,8 @@ async def get_meetings( current_user: User = Depends(require_auth), db: Session 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/{meeting_id}/user/", summary="获取单一会议信息", response_model=MeetingResponse)
-async def get_meeting(meeting_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db)) -> MeetingResponse:
+async def get_meeting(meeting_id: str,
+                      current_user: User = Depends(require_auth), db: Session = Depends(get_db)) -> MeetingResponse:
     """获取单一会议信息"""
     user_id = str(current_user.id)
     try:
@@ -172,7 +163,9 @@ async def get_meeting(meeting_id: str, current_user: User = Depends(require_auth
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.put("/{meeting_id}/user/",summary="更新会议信息", response_model=MeetingResponse)
-def update_meeting(meeting_id: str,  meeting: MeetingCreate,current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> MeetingResponse:
+def update_meeting(meeting_id: str,
+                   meeting: MeetingCreate,
+                   current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> MeetingResponse:
     """更新会议信息"""
     user_id = str(current_user.id)
     updated_meeting = meeting_service.update_meeting(db, meeting_id, meeting,user_id)
@@ -181,7 +174,8 @@ def update_meeting(meeting_id: str,  meeting: MeetingCreate,current_user: User =
     return updated_meeting
 
 @router.delete("/{meeting_id}/user/", summary="删除指定会议信息")
-async def delete_meeting(meeting_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> dict[str, str]:
+async def delete_meeting(meeting_id: str,
+                         current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> dict[str, str]:
     """删除指定会议信息"""
     user_id = str(current_user.id)
     success = await meeting_service.delete_meeting(db, meeting_id,user_id)
@@ -191,7 +185,9 @@ async def delete_meeting(meeting_id: str, current_user: User = Depends(require_a
 
 # Document generation endpoints
 @router.post("/{meeting_id}/generate-notification", summary="生成会议通知文档")
-async def generate_notification(meeting_id: str, current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+async def generate_notification(meeting_id: str,
+                                current_user: User = Depends(require_auth),
+                                db: Session = Depends(get_db)) -> dict[str, Any]:
     """生成会议通知文档"""
     user_id = str(current_user.id)
     print("当前用户ID",)
@@ -207,7 +203,9 @@ async def generate_notification(meeting_id: str, current_user: User = Depends(re
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{meeting_id}/generate-minutes")
-async def generate_minutes(meeting_id: str,current_user: User = Depends(require_auth),  db: Session = Depends(get_db)):
+async def generate_minutes(meeting_id: str,
+                           current_user: User = Depends(require_auth),
+                           db: Session = Depends(get_db))-> dict[str, Any]:
     """生成会议纪要文档
     """
     user_id = str(current_user.id)
@@ -250,8 +248,10 @@ async_client = AsyncClient(timeout=5)
 security = HTTPBearer()
 
 # 外部 wss 地址（目标服务）
-EXTERNAL_WSS_URL = "wss://ai.csg.cn/aihear-50-249/app/hisee/websocket/storage/57fb5931-f776-4b18-be59-a137f706a949/appid=tainsureAssistant,uid=555fd741-5023-4ea8-84ff-b702a087137b,ack=1,pk_on=1"
-
+EXTERNAL_WSS_URL = (
+    "wss://ai.csg.cn/aihear-50-249/app/hisee/websocket/storage/57fb5931-f776-4b18-be59-a137f706a949"
+    "?appid=tainsureAssistant,uid=555fd741-5023-4ea8-84ff-b702a087137b,ack=1,pk_on=1"
+)
 EXTERNAL_ACCESS_TOKEN = "6c0a12ed344841859e486e46fbe1b881"
 
 
@@ -262,10 +262,10 @@ class TranslationItem(BaseModel):
     target_lang: str
     translated_text: str
     confidence: Optional[float] = None
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
 class TranslationBatch(BaseModel):
-    items: List[TranslationItem]
+    items: list[TranslationItem]
     batch_id: Optional[str] = None
     user_id: Optional[str] = None
     session_id: Optional[str] = None
@@ -273,7 +273,9 @@ class TranslationBatch(BaseModel):
 
 # 后台任务：连接外部 wss 服务并接收消息
 @router.post("/{meeting_id}/translate_text_load")
-async def translate_text_load(meeting_id: str, translate_text: str, speaker_name: str = None):
+async def translate_text_load(meeting_id: str,
+                              translate_text: str,
+                              speaker_name: str = None)-> dict[str, Any]:
     """
     接收翻译文本数据并录入数据库
 
@@ -389,7 +391,8 @@ async def upload_audio(
         filename_stem = Path(original_filename).stem  # 获取不带扩展名的文件名部分
         # 构建转换后的文件路径
         converted_path = f"temp/converted_{filename_stem}.wav"
-        audio = audio.set_frame_rate(16000).set_channels(1)  # 16kHz 单声道
+        # 16kHz 单声道
+        audio = audio.set_frame_rate(16000).set_channels(1)
         audio.export(converted_path, format="wav")
         # 后续用 converted_path 进行转录
         transcription = await speech_service.transcribe_audio_file(converted_path, speaker_id)
@@ -417,7 +420,7 @@ async def upload_audio(
 
 # Get meeting transcriptions
 @router.get("/{meeting_id}/transcriptions")
-async def get_meeting_transcriptions(meeting_id: str, db: Session = Depends(get_db)):
+async def get_meeting_transcriptions(meeting_id: str, db: Session = Depends(get_db)) -> list[object]:
     """Get all transcriptions for a meeting"""
     transcriptions = await meeting_service.get_meeting_transcriptions(db, meeting_id)
     return transcriptions

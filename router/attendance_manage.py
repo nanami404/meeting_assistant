@@ -4,20 +4,11 @@ import os
 import json
 from typing import List
 from typing import Generator
-from datetime import datetime
-from pathlib import Path
-from urllib.parse import quote_plus
 import pytz
-from loguru import logger
-from httpx import AsyncClient
+
 
 #第三方库
-from fastapi import  WebSocket, WebSocketDisconnect, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import AsyncSession
-from pydub import AudioSegment
 from fastapi import APIRouter,HTTPException, Depends
 
 #自定义库
@@ -25,19 +16,17 @@ from services.sign_in_service import SignInService
 from services.document_service import DocumentService
 from services.speech_service import SpeechService
 from services.email_service import EmailService
-from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate, PersonSignResponse,ParticipantCreate
+from schemas import PersonSignResponse
 from db.conn_manager import ConnectionManager
 from db.databases import DatabaseConfig, DatabaseSessionManager
 
-from services.auth_dependencies import require_auth, require_admin
-
-from services.service_models import User, UserStatus, UserRole
+from services.service_models import User
 
 # 对外暴露的依赖注入函数
 db_config = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
 get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session  #
+get_async_db = db_manager.get_async_session
 
 router = APIRouter()
 # 获取东八区当前时间
@@ -58,7 +47,7 @@ router = APIRouter(prefix="/api/attendance", tags=["SignIn"])
 
 # 获取当前所有人员的签到状态
 @router.get("/people", summary="获取当前所有人员的签到状态", response_model=List[PersonSignResponse])
-async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)) -> List[PersonSignResponse]:
+async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)) -> list[PersonSignResponse]:
     """获取所有人员的签到状态"""
     try:
         # 调用服务层方法，传入数据库会话
@@ -73,7 +62,7 @@ async def sign(
     meeting_id: str,
     current_user_id: str,
     db: Session = Depends(get_db)
-):
+)-> dict[str, str]:
     """人员签到接口"""
     user_id = int(current_user_id)
     user = db.query(User).filter(User.id == user_id).first()
@@ -93,13 +82,12 @@ async def leave(
     meeting_id: str,
     current_user_id: str,
     db: Session = Depends(get_db)
-):
+)-> dict[str, str]:
     """
     人员请假接口（绑定会议维度）
     """
     user_id = current_user_id
     user = db.query(User).filter(User.id == user_id).first()
-    print("当前姓名是",user.name)
     try:
         # 调用服务层请假方法，传入姓名、会议ID和数据库会话
         result = await attendance_service.leave_person(
@@ -120,7 +108,7 @@ async def leave(
 async def close_sign(
     meeting_id: str,
     db: Session = Depends(get_db)
-):
+) -> dict[str, str]:
     """
     关闭指定会议的签到功能，重置该会议内所有人员的签到/请假状态
     """
