@@ -12,6 +12,7 @@ from services.auth_dependencies import require_auth
 from services.service_models import User
 from services.message_service import MessageService
 from schemas import MessageCreate, MessageResponse, MessageRecipientResponse
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
@@ -73,17 +74,13 @@ async def list_my_messages(
     page: int = Query(default=1, ge=1, description="页码，从1开始"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量，最大100"),
     only_unread: bool | None = Query(default=None, description="是否仅查询未读消息"),
-    is_read: bool | None = Query(default=None, description="是否已读（用于兼容现有调用）"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_auth),
 ):
     """查询当前用户收到的消息（支持分页）"""
     try:
-        # 兼容 is_read=false 的调用方式：当 is_read 提供时，以其为准
-        if is_read is not None:
-            only_unread_effective = (not is_read)
-        else:
-            only_unread_effective = bool(only_unread) if only_unread is not None else False
+        # 根据 only_unread 控制是否仅查询未读消息；未提供则视为 False
+        only_unread_effective = True if only_unread is True else False
 
         messages, total = await message_service.list_messages(
             db,
@@ -147,6 +144,28 @@ async def mark_read(message_id: str,
         raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 
+@router.post("/mark-read/batch", summary="批量标记消息为已读", response_model=dict)
+async def mark_read_batch(payload: BatchMarkReadRequest,
+                          db: Session = Depends(get_db),
+                          current_user: User = Depends(require_auth)):
+    """批量将当前用户的指定消息标记为已读"""
+    try:
+        updated = await message_service.mark_read_batch(
+            db=db,
+            recipient_id=str(current_user.id),
+            message_ids=payload.message_ids,
+        )
+        return _resp({
+            "updated": updated,
+            "message_ids": payload.message_ids,
+        }, message="批量标记已读成功")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"批量标记已读异常: {e}")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
+
+
 @router.delete("/delete", summary="删除当前用户与消息的关联(仅删除关联表)", response_model=dict)
 async def delete_message_links(
     is_read: bool | None = Query(default=None, description="按已读/未读状态删除；不传表示不限"),
@@ -183,3 +202,6 @@ async def delete_message_links(
     except Exception as e:
         logger.error(f"删除消息关联异常: {e}")
         raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
+
+class BatchMarkReadRequest(BaseModel):
+    message_ids: list[str]

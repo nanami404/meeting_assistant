@@ -161,6 +161,54 @@ class MessageService(object):
         await db.commit()
         return True
 
+    async def mark_read_batch(self,
+                              db: AsyncSession,
+                              recipient_id: str,
+                              message_ids: list[str]) -> int:
+        """批量标记多条消息为已读（针对当前用户）
+        Args:
+            db: 数据库会话
+            recipient_id: 接收者ID（字符串或数字字符串）
+            message_ids: 消息ID列表（字符串形式）
+        Returns:
+            int: 成功标记为已读的关联记录数量
+        """
+        try:
+            rid_int = int(str(recipient_id))
+        except (TypeError, ValueError):
+            raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
+
+        # 过滤并转换消息ID
+        cast_message_ids: list[int] = []
+        for mid in message_ids:
+            try:
+                cast_message_ids.append(int(str(mid)))
+            except (TypeError, ValueError):
+                logger.warning(f"跳过无效的消息ID: {mid}")
+
+        if not cast_message_ids:
+            return 0
+
+        # 查询当前用户且未读的关联记录
+        rows = await db.execute(
+            select(MessageRecipient).where(
+                (MessageRecipient.recipient_id == rid_int) &
+                (MessageRecipient.message_id.in_(cast_message_ids)) &
+                (MessageRecipient.is_read == False)
+            )
+        )
+        recipients = rows.scalars().all()
+        if not recipients:
+            return 0
+
+        # 批量标记为已读
+        now_ts = datetime.now(shanghai_tz)
+        for mr in recipients:
+            mr.is_read = True
+            mr.read_at = now_ts
+
+        await db.commit()
+        return len(recipients)
     async def delete_message_links(self,
                                    db: AsyncSession,
                                    recipient_id: str,
