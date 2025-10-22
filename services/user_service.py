@@ -233,9 +233,9 @@ class UserService(object):
             logger.error(f"查询用户失败(email={email}): {e}")
             raise e
 
-    async def get_user_by_username(self, db: Session, username: str) -> Optional[User]:
+    def get_user_by_username(self, db: Session, username: str) -> Optional[User]:
         """根据用户名获取用户"""
-        user = await db.query(User).filter(User.user_name == username).first()
+        user = db.query(User).filter(User.user_name == username).first()
         try:
             return user
         except Exception as e:
@@ -264,13 +264,13 @@ class UserService(object):
             phone_pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
             if re.match(email_pattern, identifier):
                 # 邮箱登录
-                return await self.get_user_by_email(db, identifier)
+                return self.get_user_by_email(db, identifier)
             elif re.match(phone_pattern, identifier):
                 # 手机号登录
-                return await self.get_user_by_phone(db, identifier)
+                return self.get_user_by_phone(db, identifier)
             else:
                 # 用户名登录
-                return await self.get_user_by_username(db, identifier)
+                return self.get_user_by_username(db, identifier)
 
         except Exception as e:
             logger.error(f"根据登录标识符查询用户失败(identifier={identifier}): {e}")
