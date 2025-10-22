@@ -83,7 +83,7 @@ class AuthService(object):
                 logger.warning(f"认证失败：用户状态为{user.status}，拒绝登录 user_id={user.id}")
                 return None
 
-            is_valid: bool = await user_service.verify_password(user, plain_password=password)
+            is_valid: bool = user_service.verify_password(user, plain_password=password)
             if not is_valid:
                 logger.warning(f"认证失败：密码错误 user_id={user.id}")
                 return None
