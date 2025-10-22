@@ -241,7 +241,6 @@ async def send_notification(meeting_id: str, db: Session = Depends(get_db))-> di
         raise HTTPException(status_code=400, detail=str(e))
 
 
-
 # 复用 AsyncClient（避免每次调用创建新连接，提升性能）
 async_client = AsyncClient(timeout=5)
 # Token 验证（你的服务对客户端的验证）
@@ -309,7 +308,7 @@ async def translate_text_load(meeting_id: str,
             meeting_id=meeting_id.strip(),
             speaker_name=speaker_name.strip() if speaker_name else None,
             text=translate_text.strip(),
-            created_time=datetime.utcnow()
+            created_time=datetime.now(pytz.timezone('Asia/Shanghai'))
         )
 
         # 添加到数据库

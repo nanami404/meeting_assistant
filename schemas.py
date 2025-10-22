@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any
 import re
 
 
@@ -39,7 +39,7 @@ class ParticipantResponse(ParticipantBase):
     attendance_status: str
     created_at: datetime
 
-    class Config:
+    class Config(object):
         from_attributes = True
 
 
@@ -57,7 +57,7 @@ class PersonSignResponse(BaseModel):
     is_signed: bool
     is_on_leave: bool
 
-    class Config:
+    class Config(object):
         from_attributes = True
 
 class MeetingBase(BaseModel):
@@ -70,8 +70,8 @@ class MeetingBase(BaseModel):
 
 
 class MeetingCreate(MeetingBase):
-    participants: List[ParticipantCreate] = []
-    attachments: List[AttachmentCreate] = []
+    participants: list[ParticipantCreate] = []
+    attachments: list[AttachmentCreate] = []
 
 
 class MeetingResponse(MeetingBase):
@@ -79,9 +79,9 @@ class MeetingResponse(MeetingBase):
     status: str
     created_at: datetime
     updated_at: datetime
-    participants: List[ParticipantResponse] = []
+    participants: list[ParticipantResponse] = []
 
-    class Config:
+    class Config(object):
         from_attributes = True
 
 
@@ -101,7 +101,7 @@ class TranscriptionBase(BaseModel):
     confidence_score: int = Field(default=80, ge=0, le=100)
 
     @validator('confidence_score')
-    def validate_confidence(cls, v):
+    def validate_confidence(cls: Any, v: float) -> str:
         if not 0 <= v <= 100:
             raise ValueError('置信度分数必须在0到100之间')
         return v
@@ -138,15 +138,15 @@ class TranscriptionResponse(TranscriptionBase):
         description="是否为决策项",
     )
 
-    class Config:
+    class Config(object):
         from_attributes = True
 
 
 class WebSocketMessage(BaseModel):
-    type: str  # "audio_chunk", "text_message", "transcription"
+    type: str
     meeting_id: str
     speaker_id: Optional[str] = None
-    audio_data: Optional[str] = None  # Base64 encoded audio
+    audio_data: Optional[str] = None
     text: Optional[str] = None
     timestamp: Optional[datetime] = None
 
@@ -156,9 +156,7 @@ class WebSocketMessage(BaseModel):
 class UserBase(BaseModel):
     """
     用户基础模型
-    
     包含用户的基本信息字段，用作其他用户相关模型的基类。
-    
     Attributes:
         name: 用户姓名，必填，最大长度100字符
         email: 邮箱地址，必填，自动验证邮箱格式
@@ -178,13 +176,13 @@ class UserBase(BaseModel):
     status: str = Field(default="active", description="用户状态")
 
     @validator('gender')
-    def validate_gender(cls, v):
+    def validate_gender(cls: Any, v: str) -> str:
         if v is not None and v not in ['male', 'female', 'other']:
             raise ValueError('性别必须为male、female或other')
         return v
 
     @validator('phone')
-    def validate_phone(cls, v):
+    def validate_phone(cls: Any, v: str) -> str:
         if v is not None:
             # 中国大陆手机号验证
             pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
@@ -193,13 +191,13 @@ class UserBase(BaseModel):
         return v
 
     @validator('user_role')
-    def validate_role(cls, v):
+    def validate_role(cls: Any, v: str) -> str:
         if v not in ['admin', 'user']:
             raise ValueError('用户角色必须为admin或user')
         return v
 
     @validator('status')
-    def validate_status(cls, v):
+    def validate_status(cls: Any, v: str) -> str:
         if v not in ['active', 'inactive', 'suspended']:
             raise ValueError('用户状态必须为active、inactive或suspended')
         return v
@@ -208,10 +206,8 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """
     创建用户请求模型
-    
     用于用户注册和管理员创建用户的请求。
     包含密码字段并进行强度验证。
-    
     Attributes:
         user_name: 用户账号，必填
         role: 角色，选填，默认 user（admin/user）
@@ -224,7 +220,7 @@ class UserCreate(UserBase):
     password: Optional[str] = Field(None, min_length=8, max_length=128, description="用户密码")
 
     @validator('user_name')
-    def validate_user_name(cls, v):
+    def validate_user_name(cls: Any, v: str) -> str:
         """
         验证用户账号格式：字母、数字、下划线、中划线，长度 3-50
         """
@@ -236,7 +232,7 @@ class UserCreate(UserBase):
         return v
 
     @validator('password')
-    def validate_password(cls, v):
+    def validate_password(cls: Any, v: str)-> str:
         """
         密码强度验证：
         - 至少8位字符
@@ -247,27 +243,24 @@ class UserCreate(UserBase):
             return v
         if len(v) < 8:
             raise ValueError('密码长度至少为8位')
-        
         # 检查密码复杂度
         has_upper = bool(re.search(r'[A-Z]', v))
         has_lower = bool(re.search(r'[a-z]', v))
         has_digit = bool(re.search(r'\d', v))
         has_special = bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', v))
-        
+
         complexity_count = sum([has_upper, has_lower, has_digit, has_special])
         if complexity_count < 3:
             raise ValueError('密码必须包含大写字母、小写字母、数字和特殊字符中的至少3种')
-        
+
         return v
 
 
 class UserUpdate(BaseModel):
     """
     更新用户请求模型
-    
     用于更新用户信息的请求，姓名(name)与账号(user_name)为必填，其他字段可选。
     不包含密码字段，密码更新需要单独的接口。
-    
     Attributes:
         name: 用户姓名，必填
         user_name: 用户账号，必填
@@ -290,10 +283,8 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     """
     用户响应模型
-    
     用于API响应的用户信息模型。
     不包含敏感信息如密码哈希。
-    
     Attributes:
         id: 用户唯一标识
         created_at: 创建时间
@@ -308,17 +299,15 @@ class UserResponse(UserBase):
     created_by: Optional[str] = Field(None, description="创建者用户ID")
     updated_by: Optional[str] = Field(None, description="更新者用户ID")
 
-    class Config:
+    class Config(object):
         from_attributes = True
 
 
 class UserBasicResponse(BaseModel):
     """
     用户基础信息响应模型
-    
     用于公共接口返回用户基础信息，主要用于业务场景如创建会议时选择指定用户。
     仅包含必要的基础字段，不包含敏感信息。
-    
     Attributes:
         id: 用户唯一标识
         name: 用户姓名
@@ -334,17 +323,15 @@ class UserBasicResponse(BaseModel):
     company: Optional[str] = Field(None, description="部门/单位名称")
     email: Optional[EmailStr] = Field(None, description="邮箱地址")
 
-    class Config:
+    class Config(object):
         from_attributes = True
 
 
 class UserLogin(BaseModel):
     """
     用户登录请求模型
-    
     用于用户登录验证的请求模型。
     支持用户名、邮箱或手机号登录。
-    
     Attributes:
         username: 用户名（用户名、邮箱或手机号），必填
         password: 密码，必填
@@ -353,28 +340,24 @@ class UserLogin(BaseModel):
     password: str = Field(..., min_length=1, max_length=128, description="密码")
 
     @validator('username')
-    def validate_username(cls, v):
+    def validate_username(cls: Any, v: str)-> str:
         """
         验证用户名格式：支持用户名、邮箱或手机号
         """
         # 去除首尾空格
         v = v.strip()
-        
         # 检查长度
         if len(v) < 1 or len(v) > 255:
             raise ValueError('用户名长度必须在1-255个字符之间')
-        
         # 检查是否为邮箱格式
         email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         # 检查是否为手机号格式
         phone_pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
         # 检查是否为用户名格式（字母、数字、下划线、中划线）
         username_pattern = r'^[a-zA-Z0-9_-]+$'
-        
         # 支持三种格式：邮箱、手机号、用户名
         if not (re.match(email_pattern, v) or re.match(phone_pattern, v) or re.match(username_pattern, v)):
             raise ValueError('用户名格式不正确，支持用户名（字母数字下划线）、邮箱地址或手机号码')
-        
         return v
 
 
@@ -382,7 +365,7 @@ class MessageCreate(BaseModel):
     title: str
     content: str
     # 接收者ID列表，使用字符串以兼容现有路由传递的字符串ID
-    recipient_ids: List[str]
+    recipient_ids: list[str]
 
 
 class MessageRecipientResponse(BaseModel):
@@ -397,7 +380,7 @@ class MessageResponse(BaseModel):
     content: str
     sender_id: str
     created_at: datetime
-    recipients: List[MessageRecipientResponse] = []
+    recipients: list[MessageRecipientResponse] = []
 
-    class Config:
+    class Config(object):
         from_attributes = True

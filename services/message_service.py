@@ -129,7 +129,6 @@ class MessageService(object):
             return messages, total
 
 
-
     async def mark_read(self,
                         db: Session,
                         message_id: str,
@@ -201,5 +200,4 @@ class MessageService(object):
             deleted = db.query(MessageRecipient).filter(*conditions).delete(synchronize_session=False)
             db.commit()
             return int(deleted)
-
 

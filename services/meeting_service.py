@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
 from loguru import logger
+import pytz
 
 # 第三方库
 from sqlalchemy.orm import Session
@@ -59,7 +60,7 @@ class MeetingService(object):
                 file_path=attachment_data.file_path,
                 file_size=attachment_data.file_size,
                 content_type=attachment_data.content_type,
-                uploaded_at=datetime.now()
+                uploaded_at=datetime.now(pytz.timezone('Asia/Shanghai'))
             )
             db.add(attachment)
         db.commit()
@@ -119,8 +120,6 @@ class MeetingService(object):
         if user_role != "admin":
             query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
                 Participant.user_code == current_user_id)
-
-
         meeting = query.filter(Meeting.id == meeting_id).first()
 
         if not meeting:
@@ -132,7 +131,7 @@ class MeetingService(object):
         meeting.location = meeting_data.location
         meeting.duration_minutes = meeting_data.duration_minutes
         meeting.agenda = meeting_data.agenda
-        meeting.updated_at = datetime.now(timezone.utc)
+        meeting.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
         db.query(Participant).filter(Participant.meeting_id == meeting_id).delete()
         for participant_data in meeting_data.participants:
             user = db.query(User).filter(User.name == participant_data.name).first()
@@ -169,7 +168,6 @@ class MeetingService(object):
         meeting = query.filter(Meeting.id == meeting_id).first()
         if not meeting:
             return False
-
         db.delete(meeting)
         db.commit()
         return True
@@ -197,7 +195,7 @@ class MeetingService(object):
                 speaker_id=transcription_data.speaker_id,
                 speaker_name=transcription_data.speaker_name,
                 text=transcription_data.text,
-                timestamp=transcription_data.timestamp or datetime.now(timezone.utc),
+                timestamp=transcription_data.timestamp or datetime.now(pytz.timezone('Asia/Shanghai')),
                 confidence_score=transcription_data.confidence_score
             )
             # add 是同步方法，无需 await
@@ -228,7 +226,7 @@ class MeetingService(object):
             return False
 
         meeting.status = status
-        meeting.updated_at = datetime.now(timezone.utc) # Compliant
+        meeting.updated_at = datetime.now(pytz.timezone('Asia/Shanghai')) # Compliant
 
         db.commit()
         return True
