@@ -99,7 +99,7 @@ async def refresh(
         if not payload:
             _raise(status.HTTP_401_UNAUTHORIZED, "无效或过期的刷新令牌", "unauthorized")
         user_id = payload.get("sub")
-        user = user_service.get_user_by_id(db, user_id)
+        user = await user_service.get_user_by_id(db, user_id)
         if not user:
             _raise(status.HTTP_401_UNAUTHORIZED, "用户不存在或已删除", "unauthorized")
         if user.status != UserStatus.ACTIVE.value:
@@ -366,7 +366,7 @@ async def get_user(user_id: str, db: Session = Depends(get_db), current_user: Us
         if current_user.user_role != "admin" and str(current_user.id) != user_id:
             _raise(status.HTTP_403_FORBIDDEN, "权限不足，只能查询自己的用户信息", "forbidden")
         
-        user = user_service.get_user_by_id(db, user_id)
+        user = await user_service.get_user_by_id(db, user_id)
         if not user:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         data = UserResponse(
