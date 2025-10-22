@@ -1,24 +1,21 @@
 # 标准库
 import uuid
-from datetime import datetime, timezone
 from typing import List, Optional, Dict
 
 # 第三方库
 from sqlalchemy.orm import Session
-from sqlalchemy.future import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
 # 自定义类
-from .service_models import Meeting, Participant, Transcription, PersonSign, User
-from schemas import MeetingCreate,TranscriptionCreate, PersonSignCreate
+from .service_models import Meeting, Participant, PersonSign
+from schemas import  PersonSignCreate
 
 class SignInService(object):
-    async def get_people_sign_status(self, db: Session, meeting_id: str) -> List[PersonSign]:
+    async def get_people_sign_status(self, db: Session, meeting_id: str) -> list[PersonSign]:
         """查询所有人员的签到状态（从数据库）"""
         # 可添加排序、过滤等逻辑（如按姓名排序）
         # 1. 验证会议存在性（会议不存在直接抛404，而非返回None）
-        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        meeting = await db.query(Meeting).filter(Meeting.id == meeting_id).first()
         if not meeting:
             raise HTTPException(
                 status_code=404,
@@ -26,7 +23,7 @@ class SignInService(object):
             )
         return db.query(PersonSign).filter(PersonSign.meeting_id==meeting_id).order_by(PersonSign.name).all()
 
-    async def sign_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> Dict[str, str]:
+    async def sign_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> dict[str, str]:
         """
         处理人员签到逻辑（绑定会议维度，确保签到状态仅对当前会议生效）
         :param db: 数据库会话
@@ -35,7 +32,7 @@ class SignInService(object):
         :return: 签到结果消息
         """
         # 1. 验证会议存在性（会议不存在直接抛404，而非返回None）
-        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        meeting = await db.query(Meeting).filter(Meeting.id == meeting_id).first()
         if not meeting:
             raise HTTPException(
                 status_code=404,
@@ -43,7 +40,8 @@ class SignInService(object):
             )
 
         # 2. 验证人员存在性（人员不存在抛404，而非仅打印日志）
-        person = db.query(Participant).filter(Participant.name == name, Participant.meeting_id == meeting_id).first()
+        person = await db.query(Participant).filter(
+            Participant.name == name, Participant.meeting_id == meeting_id).first()
         if not person:
             raise HTTPException(
                 status_code=404,
@@ -52,7 +50,7 @@ class SignInService(object):
 
         # 3. 查找“人员-会议”关联的签到记录（核心：绑定会议维度，避免全局状态污染）
         # 注意：此处需用数据库模型 PersonSign，而非 Pydantic 模型 PersonSignCreate
-        user_meeting_sign = db.query(PersonSign).filter(
+        user_meeting_sign = await db.query(PersonSign).filter(
             PersonSign.name == name,
             PersonSign.meeting_id == meeting_id
         ).first()
@@ -92,7 +90,7 @@ class SignInService(object):
             "is_signed": user_meeting_sign.is_signed
         }
 
-    async def leave_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> Dict[str, str]:
+    async def leave_person(self, db: Session, name: str, meeting_id: str, user_id: str) -> dict[str, str]:
         """
         处理指定会议的人员请假逻辑
         :param db: 数据库会话
@@ -101,7 +99,7 @@ class SignInService(object):
         :return: 请假结果消息
         """
         # 1. 验证会议是否存在
-        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        meeting = await db.query(Meeting).filter(Meeting.id == meeting_id).first()
         if not meeting:
             raise HTTPException(
                 status_code=404,
@@ -109,7 +107,8 @@ class SignInService(object):
             )
 
         # 2. 验证人员是否存在
-        person = db.query(Participant).filter(Participant.name == name, Participant.meeting_id == meeting_id).first()
+        person = await db.query(Participant).filter(
+            Participant.name == name, Participant.meeting_id == meeting_id).first()
         if not person:
             raise HTTPException(
                 status_code=404,
@@ -117,7 +116,7 @@ class SignInService(object):
             )
 
         # 3. 查找该人员在当前会议中的关联记录（无记录则自动创建）
-        user_meeting = db.query(PersonSign).filter(
+        user_meeting = await db.query(PersonSign).filter(
             PersonSign.name == name,
             PersonSign.meeting_id == meeting_id
         ).first()
@@ -155,7 +154,7 @@ class SignInService(object):
             "is_on_leave": user_meeting.is_on_leave
         }
 
-    async def close_meeting_sign(self, db: Session, meeting_id: str) -> Dict[str, str]:
+    async def close_meeting_sign(self, db: Session, meeting_id: str) -> dict[str, str]:
         """
         关闭指定会议的签到，重置该会议内所有人员的签到/请假状态
         :param db: 数据库会话
@@ -163,7 +162,7 @@ class SignInService(object):
         :return: 操作结果消息
         """
         # 1. 验证会议是否存在
-        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        meeting = await db.query(Meeting).filter(Meeting.id == meeting_id).first()
         if not meeting:
             raise HTTPException(
                 status_code=404,
@@ -171,7 +170,7 @@ class SignInService(object):
             )
 
         # 2. 仅重置该会议下所有人员的签到状态（不影响其他会议）
-        affected_rows = db.query(PersonSign).filter(
+        affected_rows = await db.query(PersonSign).filter(
             PersonSign.meeting_id == meeting_id
         ).update({
             "is_signed": False,

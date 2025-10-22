@@ -11,7 +11,7 @@ from loguru import logger
 import bcrypt
 
 # 自定义模块
-from .service_models import User, UserRole, UserStatus, Meeting
+from services.service_models import User, UserRole, UserStatus, Meeting
 from schemas import UserCreate, UserUpdate
 
 
@@ -28,7 +28,7 @@ class UserService(object):
         """
         try:
             # 唯一性检查（仅用户名）
-            exists = db.query(User).filter(User.user_name == user_data.user_name).first()
+            exists = await db.query(User).filter(User.user_name == user_data.user_name).first()
             if exists:
                 raise ValueError("user_name 已被占用")
 
@@ -76,10 +76,9 @@ class UserService(object):
         order: str = "asc",
     ) -> Tuple[List[User], int]:
         """获取用户基础信息列表（公共接口专用）
-        
+
         专门用于公共接口，支持按用户名和部门进行模糊查询。
         仅返回活跃状态的用户，用于业务场景如创建会议时选择指定用户。
-        
         Args:
             db: 数据库会话
             page: 页码，从1开始
@@ -88,18 +87,18 @@ class UserService(object):
             company_keyword: 部门/单位关键词（模糊匹配）
             order_by: 排序字段，默认按姓名排序
             order: 排序方向，asc/desc，默认升序
-            
+
         Returns:
             Tuple[List[User], int]: (用户列表, 总数)
         """
         try:
             # 基础查询：仅查询活跃状态的用户
-            query = db.query(User).filter(User.status == UserStatus.ACTIVE.value)
-            
+            query = await db.query(User).filter(User.status == UserStatus.ACTIVE.value)
+
             # 按用户姓名模糊匹配
             if name_keyword:
                 query = query.filter(User.name.like(f"%{name_keyword}%"))
-            
+
             # 按部门/单位模糊匹配
             if company_keyword:
                 query = query.filter(User.company.like(f"%{company_keyword}%"))
@@ -111,7 +110,6 @@ class UserService(object):
             valid_order_fields = ["name", "company", "created_at"]
             if order_by not in valid_order_fields:
                 order_by = "name"
-            
             sort_col = getattr(User, order_by, User.name)
             if order.lower() == "desc":
                 query = query.order_by(sort_col.desc())
@@ -125,12 +123,12 @@ class UserService(object):
                 page_size = 20
             if page_size > 100:  # 限制最大页面大小
                 page_size = 100
-                
+
             items = query.offset((page - 1) * page_size).limit(page_size).all()
-            
+
             logger.info(f"公共接口查询用户列表: 页码={page}, 页大小={page_size}, 总数={total}")
             return items, total
-            
+
         except Exception as e:
             logger.error(f"公共接口查询用户列表失败: {e}")
             raise e
@@ -154,13 +152,13 @@ class UserService(object):
         返回 (items, total) 二元组
         """
         try:
-            query = db.query(User)
+            query = await db.query(User)
 
             if user_role:
                 query = query.filter(User.user_role == user_role)
             if status:
                 query = query.filter(User.status == status)
-            
+
             # 原有的通用关键词匹配（保持向后兼容）
             if keyword:
                 like = f"%{keyword}%"
@@ -172,7 +170,6 @@ class UserService(object):
                         User.user_name.like(like),
                     )
                 )
-            
             # 独立字段的模糊匹配（AND 关系）
             if name_keyword:
                 query = query.filter(User.name.like(f"%{name_keyword}%"))
@@ -215,9 +212,13 @@ class UserService(object):
                 user_id_int = user_id
             except (TypeError, ValueError):
                 user_id_int = None
-            query = db.query(User).filter(User.id == user_id_int) if user_id_int is not None else db.query(User).filter(User.id == user_id)
+            query = (
+                await db.query(User).filter(User.id == user_id_int)
+                if user_id_int is not None
+                else db.query(User).filter(User.id == user_id)
+            )
             if active_only:
-                query = query.filter(User.status == UserStatus.ACTIVE.value)
+                query = await query.filter(User.status == UserStatus.ACTIVE.value)
             return query.first()
         except Exception as e:
             logger.error(f"查询用户失败(id={user_id}): {e}")
@@ -225,24 +226,27 @@ class UserService(object):
 
     async def get_user_by_email(self, db: Session, email: str) -> Optional[User]:
         """根据邮箱获取用户"""
+        user = await db.query(User).filter(User.email == email).first()
         try:
-            return db.query(User).filter(User.email == email).first()
+            return user
         except Exception as e:
             logger.error(f"查询用户失败(email={email}): {e}")
             raise e
 
     async def get_user_by_username(self, db: Session, username: str) -> Optional[User]:
         """根据用户名获取用户"""
+        user = await db.query(User).filter(User.user_name == username).first()
         try:
-            return db.query(User).filter(User.user_name == username).first()
+            return user
         except Exception as e:
             logger.error(f"查询用户失败(username={username}): {e}")
             raise e
 
     async def get_user_by_phone(self, db: Session, phone: str) -> Optional[User]:
         """根据手机号获取用户"""
+        user = await db.query(User).filter(User.phone == phone).first()
         try:
-            return db.query(User).filter(User.phone == phone).first()
+            return user
         except Exception as e:
             logger.error(f"查询用户失败(phone={phone}): {e}")
             raise e
@@ -253,13 +257,11 @@ class UserService(object):
         支持用户名、邮箱、手机号三种方式
         """
         import re
-        
         try:
             # 检查是否为邮箱格式
             email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             # 检查是否为手机号格式
             phone_pattern = r'^1(?:3\d|4[01456879]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}$'
-            
             if re.match(email_pattern, identifier):
                 # 邮箱登录
                 return await self.get_user_by_email(db, identifier)
@@ -269,12 +271,16 @@ class UserService(object):
             else:
                 # 用户名登录
                 return await self.get_user_by_username(db, identifier)
-                
+
         except Exception as e:
             logger.error(f"根据登录标识符查询用户失败(identifier={identifier}): {e}")
             raise e
 
-    async def update_user(self, db: Session, user_id: str, update_data: UserUpdate, updated_by: Optional[str] = None) -> Optional[User]:
+    async def update_user(self,
+                          db: Session,
+                          user_id: str,
+                          update_data: UserUpdate,
+                          updated_by: Optional[str] = None) -> Optional[User]:
         """更新用户信息（包含唯一性检查）
         - 仅更新请求中显式提供的字段（即使值为 None 也会应用），以支持将可选字段置空
         """
@@ -284,7 +290,7 @@ class UserService(object):
                 user_id_int = int(user_id)
             except (TypeError, ValueError):
                 user_id_int = None
-            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
+            user = await db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return None
 
@@ -331,7 +337,11 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def delete_user(self, db: Session, user_id: str, operator_id: Optional[str] = None, hard: bool = False) -> bool:
+    async def delete_user(self,
+                          db: Session,
+                          user_id: str,
+                          operator_id: Optional[str] = None,
+                          hard: bool = False) -> bool:
         """删除用户
         - 默认软删除：将用户状态置为 inactive
         - 硬删除(hard=True)：物理删除用户，并清理与用户相关的外键引用（置空）
@@ -390,7 +400,11 @@ class UserService(object):
             logger.error(f"验证密码失败(user={user.id}): {e}")
             return False
 
-    async def change_user_status(self, db: Session, user_id: str, status: str, operator_id: Optional[str] = None) -> bool:
+    async def change_user_status(self,
+                                 db: Session,
+                                 user_id: str,
+                                 status: str,
+                                 operator_id: Optional[str] = None) -> bool:
         """修改用户状态：active / inactive / suspended"""
         try:
             if status not in [UserStatus.ACTIVE.value, UserStatus.INACTIVE.value, UserStatus.SUSPENDED.value]:
@@ -400,7 +414,7 @@ class UserService(object):
                 user_id_int = int(user_id)
             except (TypeError, ValueError):
                 user_id_int = None
-            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
+            user = await db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return False
             user.status = status
@@ -419,7 +433,11 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def reset_password(self, db: Session, user_id: str, operator_id: Optional[str] = None, default_password: str = "Test@1234") -> bool:
+    async def reset_password(self,
+                             db: Session,
+                             user_id: str,
+                             operator_id: Optional[str] = None,
+                             default_password: str = "Test@1234") -> bool:
         """重置用户密码为默认值（bcrypt加密），返回是否成功"""
         try:
             # 将字符串ID转换为整数以匹配 BigInteger 主键类型
@@ -427,7 +445,7 @@ class UserService(object):
                 user_id_int = int(user_id)
             except (TypeError, ValueError):
                 user_id_int = None
-            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
+            user = await db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return False
             # 生成新的密码哈希

@@ -38,7 +38,7 @@ class SpeechService(object):
             print(f"Warning: Could not initialize microphone: {e}")
             print("Audio recording from microphone will not be available, but file upload will still work.")
 
-    async def transcribe_audio(self, audio_data: bytes, speaker_id: str) -> Optional[str]:
+    async def transcribe_audio(self, audio_data: bytes) -> Optional[str]:
         """Transcribe audio data in bytes format"""
         result = None  # 统一结果变量
         parent_dir = Path(__file__).parent.parent

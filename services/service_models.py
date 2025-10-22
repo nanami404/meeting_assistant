@@ -154,10 +154,11 @@ class Participant(Base):
     attendance_status = Column(String(50), default="pending")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(shanghai_tz))
 
+    # 与 User 模型中的 participations 对应
     user = relationship(
         "User",
         foreign_keys=[user_code],
-        back_populates="participations"  # 与 User 模型中的 participations 对应
+        back_populates="participations"
     )
     meeting = relationship("Meeting", back_populates="participants")
 
@@ -257,7 +258,15 @@ class MessageRecipient(Base):
 
     def __repr__(self) -> str:
         """字符串表示方法，便于调试"""
-        return f"<MessageRecipient(id={self.id}, message_id={self.message_id}, recipient_id={self.recipient_id}, is_read={self.is_read})>"
+        return (
+            f"<MessageRecipient("
+            f"id={self.id}, "
+            f"message_id={self.message_id}, "
+            f"recipient_id={self.recipient_id}, "
+            f"is_read={self.is_read}"
+            f")>"
+        )
+
 
     def mark_as_read(self) -> None:
         """标记消息为已读"""
