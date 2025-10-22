@@ -23,13 +23,16 @@ db_config = DatabaseConfig()
 db_manager = DatabaseSessionManager(db_config)
 get_db = db_manager.get_sync_session  # 同步会话依赖
 
+INTERNAL_SERVER_ERROR = "服务器内部错误"
 
 def _resp(data=None, message: str = "success", code: int = 0):
     return {"code": code, "message": message, "data": data}
 
 
 @router.post("/send", summary="发送消息", response_model=dict)
-async def send_message(payload: MessageCreate, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
+async def send_message(payload: MessageCreate,
+                       db: Session = Depends(get_db),
+                       current_user: User = Depends(require_auth)):
     """发送消息，支持多个接收者
     - 将 sender_id 与 recipient_ids 强制转换为 int，匹配 BigInteger 字段
     """
@@ -42,7 +45,7 @@ async def send_message(payload: MessageCreate, db: Session = Depends(get_db), cu
             recipient_ids=payload.recipient_ids,
         )
         # 转换响应模型
-        recipients: List[MessageRecipientResponse] = [
+        recipients: list[MessageRecipientResponse] = [
             MessageRecipientResponse(
                 recipient_id=str(r.recipient_id),
                 is_read=r.is_read,
@@ -62,7 +65,7 @@ async def send_message(payload: MessageCreate, db: Session = Depends(get_db), cu
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         logger.error(f"发送消息异常: {e}")
-        raise HTTPException(status_code=500, detail="服务器内部错误")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 
 @router.get("/list", summary="查询我的消息", response_model=dict)
@@ -90,7 +93,7 @@ async def list_my_messages(
             page_size=page_size,
         )
 
-        results: List[dict] = []
+        results: list[dict] = []
         for m in messages:
             recipients = [
                 MessageRecipientResponse(recipient_id=str(r.recipient_id), is_read=r.is_read, read_at=r.read_at)
@@ -124,11 +127,13 @@ async def list_my_messages(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         logger.error(f"查询消息异常: {e}")
-        raise HTTPException(status_code=500, detail="服务器内部错误")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 
 @router.post("/{message_id}/mark-read", summary="标记消息为已读", response_model=dict)
-async def mark_read(message_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
+async def mark_read(message_id: str,
+                    db: Session = Depends(get_db),
+                    current_user: User = Depends(require_auth)):
     """将当前用户的指定消息标记为已读"""
     try:
         ok = await message_service.mark_read(db, message_id=message_id, recipient_id=str(current_user.id))
@@ -139,7 +144,7 @@ async def mark_read(message_id: str, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         logger.error(f"标记已读异常: {e}")
-        raise HTTPException(status_code=500, detail="服务器内部错误")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
 
 
 @router.delete("/delete", summary="删除当前用户与消息的关联(仅删除关联表)", response_model=dict)
@@ -177,4 +182,4 @@ async def delete_message_links(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         logger.error(f"删除消息关联异常: {e}")
-        raise HTTPException(status_code=500, detail="服务器内部错误")
+        raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)

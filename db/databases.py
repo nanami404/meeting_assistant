@@ -27,11 +27,11 @@ class DatabaseConfig(object):
 
     def __init__(self) -> None:
         # 从环境变量读取配置，提供默认值
-        self.mysql_host = os.getenv("MYSQL_HOST", "118.89.93.181")
-        self.mysql_port = os.getenv("MYSQL_PORT", "3306")
-        self.mysql_user = os.getenv("MYSQL_USER", "nokia_cs")
-        self.db_password_raw = os.getenv("MYSQL_PASSWORD", "Siryuan#525@614")
-        self.mysql_database = os.getenv("MYSQL_DATABASE", "rjgf_meeting")
+        self.mysql_host = os.getenv("DATABASE_HOST", "localhost")
+        self.mysql_port = os.getenv("DATABASE_PORT", "3306")
+        self.mysql_user = os.getenv("DATABASE_NAME", "nokia_cs")
+        self.db_password_raw = os.getenv("DATABASE_USER", "Siryuan#525@614")
+        self.mysql_database = os.getenv("DATABASE_PASSWORD", "rjgf_meeting")
 
         # 对密码中的特殊字符进行URL编码（如#、@等）
         self.mysql_password = quote_plus(self.db_password_raw)

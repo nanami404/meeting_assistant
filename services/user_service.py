@@ -3,10 +3,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, List, Tuple
 import re
+import pytz
 
 # 第三方库
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
+from sqlalchemy import or_
 from loguru import logger
 import bcrypt
 
@@ -74,7 +75,7 @@ class UserService(object):
         company_keyword: Optional[str] = None,
         order_by: str = "name",
         order: str = "asc",
-    ) -> Tuple[List[User], int]:
+    ) -> tuple[list[User], int]:
         """获取用户基础信息列表（公共接口专用）
 
         专门用于公共接口，支持按用户名和部门进行模糊查询。
@@ -147,7 +148,7 @@ class UserService(object):
         company_keyword: Optional[str] = None,
         order_by: str = "created_at",
         order: str = "desc",
-    ) -> Tuple[List[User], int]:
+    ) -> tuple[list[User], int]:
         """获取用户列表（支持分页与筛选）
         返回 (items, total) 二元组
         """
@@ -298,7 +299,7 @@ class UserService(object):
             provided = update_data.model_dump(exclude_unset=True)
 
             # 如果更新 user_name，需要检查唯一性（对齐初始化脚本）
-            def check_unique(field_name: str, new_value: Optional[str]):
+            def check_unique(field_name: str, new_value: Optional[str]) -> User:
                 if new_value is None:
                     return
                 exists = db.query(User).filter(
@@ -337,7 +338,7 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def delete_user(self,
+    def delete_user(self,
                           db: Session,
                           user_id: str,
                           operator_id: Optional[str] = None,
@@ -361,7 +362,7 @@ class UserService(object):
                 user.status = UserStatus.INACTIVE.value
                 if operator_id:
                     user.updated_by = operator_id
-                user.updated_at = datetime.utcnow()
+                user.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
                 db.commit()
                 logger.info(f"已软删除用户: {user_id}")
                 return True
@@ -390,7 +391,7 @@ class UserService(object):
             db.rollback()
             raise e
 
-    async def verify_password(self, user: User, plain_password: str) -> bool:
+    def verify_password(self, user: User, plain_password: str) -> bool:
         """验证用户密码（bcrypt）"""
         try:
             if not user.password_hash:
@@ -420,7 +421,7 @@ class UserService(object):
             user.status = status
             if operator_id:
                 user.updated_by = operator_id
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
             db.commit()
             logger.info(f"用户状态修改成功: {user_id} -> {status}")
             return True
@@ -453,7 +454,7 @@ class UserService(object):
             user.password_hash = hashed
             if operator_id:
                 user.updated_by = operator_id
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
             db.commit()
             logger.info(f"用户密码已重置: user_id={user_id}")
             return True

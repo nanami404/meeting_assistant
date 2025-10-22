@@ -1,5 +1,6 @@
 from typing import List
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from loguru import logger
 from datetime import datetime
@@ -16,7 +17,7 @@ class MessageService(object):
     """
 
     async def send_message(self,
-                           db: Session,
+                           db: AsyncSession,
                            sender_id: str,
                            title: str,
                            content: str,
@@ -51,86 +52,85 @@ class MessageService(object):
         msg = Message(title=title, content=content, sender_id=sender_int)
         db.add(msg)
         # 确保 msg.id 可用
-        db.flush()
+        await db.flush()
 
         # 创建接收者关联记录
         for rid_int in cast_recipient_ids:
             mr = MessageRecipient(message_id=msg.id, recipient_id=rid_int, is_read=False)
             db.add(mr)
 
-        db.commit()
-        db.refresh(msg)
+        await db.commit()
+        await db.refresh(msg)
         return msg
 
-        async def list_messages(
-                self,
-                db: Session,
-                recipient_id: str,
-                only_unread: bool = False,
-                page: int = 1,
-                page_size: int = 20
-        ) -> tuple[list[Message], int]:
-            """
-                        查询用户收到的消息列表（分页）
-                    Args:
-                        db: 数据库会话
-                        recipient_id: 接收者用户ID（字符串），转换为 int 查询
-                        only_unread: 仅查询未读消息
-                        page: 页码，从1开始
-                        page_size: 每页数量
-                    Returns:
-                        tuple[list[Message], int]: (消息列表, 总条数)
-             """
-            try:
-                rid_int = int(str(recipient_id))
-            except (TypeError, ValueError):
-                raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
+    async def list_messages(
+            self,
+            db: AsyncSession,
+            recipient_id: str,
+            only_unread: bool = False,
+            page: int = 1,
+            page_size: int = 20
+    ) -> tuple[list[Message], int]:
+        """
+                    查询用户收到的消息列表（分页）
+                Args:
+                    db: 数据库会话
+                    recipient_id: 接收者用户ID（字符串），转换为 int 查询
+                    only_unread: 仅查询未读消息
+                    page: 页码，从1开始
+                    page_size: 每页数量
+                Returns:
+                    tuple[list[Message], int]: (消息列表, 总条数)
+         """
+        try:
+            rid_int = int(str(recipient_id))
+        except (TypeError, ValueError):
+            raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
 
-            # 构建过滤条件
-            conditions = [MessageRecipient.recipient_id == rid_int]
-            if only_unread:
-                conditions.append(MessageRecipient.is_read == False)
+        # 构建过滤条件
+        conditions = [MessageRecipient.recipient_id == rid_int]
+        if only_unread:
+            conditions.append(MessageRecipient.is_read == False)
 
-            # 统计总数（去重消息ID）
-            count_q = (
-                select(func.count(func.distinct(Message.id)))
-                .join(MessageRecipient, MessageRecipient.message_id == Message.id)
-                .where(*conditions)
-            )
-            total = db.execute(count_q).scalar() or 0
+        # 统计总数（去重消息ID）
+        count_q = (
+            select(func.count(func.distinct(Message.id)))
+            .join(MessageRecipient, MessageRecipient.message_id == Message.id)
+            .where(*conditions)
+        )
+        total = await db.execute(count_q).scalar() or 0
 
-            # 计算偏移
-            offset = max(0, (page - 1) * page_size)
+        # 计算偏移
+        offset = max(0, (page - 1) * page_size)
 
-            # 先分页获取消息ID，避免 join 集合导致分页偏差
-            ids_q = (
-                select(Message.id)
-                .join(MessageRecipient, MessageRecipient.message_id == Message.id)
-                .where(*conditions)
-                .group_by(Message.id)
-                .order_by(Message.created_at.desc())
-                .offset(offset)
-                .limit(page_size)
-            )
-            id_rows = db.execute(ids_q).all()
-            ids = [row[0] for row in id_rows]
+        # 先分页获取消息ID，避免 join 集合导致分页偏差
+        ids_q = (
+            select(Message.id)
+            .join(MessageRecipient, MessageRecipient.message_id == Message.id)
+            .where(*conditions)
+            .group_by(Message.id)
+            .order_by(Message.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        id_rows = await db.execute(ids_q).all()
+        ids = [row[0] for row in id_rows]
 
-            if not ids:
-                return [], total
+        if not ids:
+            return [], total
 
-            # 再按ID查询具体消息，并选择式预加载 recipients（避免重复行）
-            data_q = (
-                select(Message)
-                .where(Message.id.in_(ids))
-                .options(selectinload(Message.recipients))
-                .order_by(Message.created_at.desc())
-            )
-            messages = db.execute(data_q).scalars().all()
-            return messages, total
-
+        # 再按ID查询具体消息，并选择式预加载 recipients（避免重复行）
+        data_q = (
+            select(Message)
+            .where(Message.id.in_(ids))
+            .options(selectinload(Message.recipients))
+            .order_by(Message.created_at.desc())
+        )
+        messages = await db.execute(data_q).scalars().all()
+        return messages, total
 
     async def mark_read(self,
-                        db: Session,
+                        db: AsyncSession,
                         message_id: str,
                         recipient_id: str) -> bool:
         """标记某条消息为已读
@@ -147,7 +147,7 @@ class MessageService(object):
         except (TypeError, ValueError):
             raise ValueError("message_id 与 recipient_id 必须是数字或可转换为数字的字符串")
 
-        mr = db.execute(
+        mr = await db.execute(
             select(MessageRecipient).where(
                 (MessageRecipient.message_id == mid_int) & (MessageRecipient.recipient_id == rid_int)
             ).limit(1)
@@ -158,46 +158,45 @@ class MessageService(object):
 
         mr.is_read = True
         mr.read_at = datetime.now(shanghai_tz)
-        db.commit()
+        await db.commit()
         return True
 
-        async def delete_message_links(self,
-                                       db: Session,
-                                       recipient_id: str,
-                                       is_read: bool | None = None,
-                                       message_id: str | None = None) -> int:
-            """
-                    删除消息与当前用户的关联（仅删除关联表数据）
-                    Args:
-                        db: 数据库会话
-                        recipient_id: 当前用户ID（字符串）
-                        is_read: 根据阅读状态过滤删除（True=已读, False=未读, None=不限）
-                        message_id: 指定要删除关联的消息ID（可选）
-                    Returns:
-                        int: 删除的关联记录数量
-                    """
+    async def delete_message_links(self,
+                                   db: AsyncSession,
+                                   recipient_id: str,
+                                   is_read: bool | None = None,
+                                   message_id: str | None = None) -> int:
+        """
+                删除消息与当前用户的关联（仅删除关联表数据）
+                Args:
+                    db: 数据库会话
+                    recipient_id: 当前用户ID（字符串）
+                    is_read: 根据阅读状态过滤删除（True=已读, False=未读, None=不限）
+                    message_id: 指定要删除关联的消息ID（可选）
+                Returns:
+                    int: 删除的关联记录数量
+                """
+        try:
+            rid_int = int(str(recipient_id))
+        except (TypeError, ValueError):
+            raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
+
+        conditions = [MessageRecipient.recipient_id == rid_int]
+        if is_read is not None:
+            conditions.append(MessageRecipient.is_read == bool(is_read))
+        if message_id is not None:
             try:
-                rid_int = int(str(recipient_id))
+                mid_int = int(str(message_id))
+                conditions.append(MessageRecipient.message_id == mid_int)
             except (TypeError, ValueError):
-                raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
+                raise ValueError("message_id 必须是数字或可转换为数字的字符串")
 
-            conditions = [MessageRecipient.recipient_id == rid_int]
-            if is_read is not None:
-                conditions.append(MessageRecipient.is_read == bool(is_read))
-            if message_id is not None:
-                try:
-                    mid_int = int(str(message_id))
-                    conditions.append(MessageRecipient.message_id == mid_int)
-                except (TypeError, ValueError):
-                    raise ValueError("message_id 必须是数字或可转换为数字的字符串")
+        # 为了操作安全性：至少需要一个过滤条件（is_read 或 message_id）
+        if len(conditions) == 1:
+            # 只有 recipient_id 这一条件，可能误删全部关联，阻止操作
+            raise ValueError("必须提供 is_read 或 message_id 之一，以限制删除范围")
 
-            # 为了操作安全性：至少需要一个过滤条件（is_read 或 message_id）
-            if len(conditions) == 1:
-                # 只有 recipient_id 这一条件，可能误删全部关联，阻止操作
-                raise ValueError("必须提供 is_read 或 message_id 之一，以限制删除范围")
-
-            # 执行删除，仅影响关联表，不触碰 messages 表
-            deleted = db.query(MessageRecipient).filter(*conditions).delete(synchronize_session=False)
-            db.commit()
-            return int(deleted)
-
+        # 执行删除，仅影响关联表，不触碰 messages 表
+        deleted = db.query(MessageRecipient).filter(*conditions).delete(synchronize_session=False)
+        await db.commit()
+        return int(deleted)

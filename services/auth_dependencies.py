@@ -18,7 +18,7 @@ auth_service = AuthService()
 user_service = UserService()
 
 
-def _raise_http(status_code: int, message: str, code: str):
+def _raise_http(status_code: int, message: str, code: str)->None:
     """统一错误响应格式"""
     raise HTTPException(status_code=status_code, detail={"code": code, "message": message})
 
@@ -83,7 +83,7 @@ def require_admin(current_user: User = Depends(dependency=get_current_user)) -> 
     return current_user
 
 
-def require_roles(roles: List[str]) -> Callable:
+def require_roles(roles: list[str]) -> Callable:
     """装饰器工厂：要求特定角色之一
     示例用法：
         @router.get("/path")
