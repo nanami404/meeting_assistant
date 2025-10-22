@@ -1,5 +1,5 @@
 from typing import List, Dict
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, UploadFile, File
+from fastapi import  WebSocket, WebSocketDisconnect
 
 # WebSocket connection manager
 class ConnectionManager(object):
@@ -75,4 +75,3 @@ class ConnectionManager(object):
         # 移除所有断开连接的socket
         for socket in disconnected_sockets:
             self.disconnect(socket, meeting_id)
-

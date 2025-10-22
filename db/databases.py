@@ -22,10 +22,10 @@ load_dotenv()
 Base = declarative_base()
 
 
-class DatabaseConfig:
+class DatabaseConfig(object):
     """数据库配置类，负责解析环境变量并生成连接URL"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # 从环境变量读取配置，提供默认值
         self.mysql_host = os.getenv("MYSQL_HOST", "118.89.93.181")
         self.mysql_port = os.getenv("MYSQL_PORT", "3306")
@@ -37,14 +37,19 @@ class DatabaseConfig:
         self.mysql_password = quote_plus(self.db_password_raw)
 
         # 生成同步/异步连接URL
-        self.sync_url = f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
-        self.async_url = f"mysql+asyncmy://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
-
-
-class DatabaseSessionManager:
+        self.sync_url = (
+            f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}"
+            f"@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
+        )
+        self.async_url = (
+            f"mysql+asyncmy://{self.mysql_user}:{self.mysql_password}"
+            f"@{self.mysql_host}:{self.mysql_port}"
+            f"/{self.mysql_database}"
+        )
+class DatabaseSessionManager(object):
     """数据库会话管理器，封装同步/异步引擎与会话创建逻辑"""
 
-    def __init__(self, config: DatabaseConfig):
+    def __init__(self, config: DatabaseConfig) -> None:
         self.config = config
 
         # ========== 同步引擎与会话工厂 ==========
