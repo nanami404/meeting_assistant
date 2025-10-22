@@ -1,15 +1,17 @@
 # 标准库
-from loguru import logger
+from typing import Optional
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from loguru import logger
 
 # 自定义模块
 from db.databases import DatabaseConfig, DatabaseSessionManager
-from services.auth_dependencies import require_auth
-from services.service_models import User
 from services.message_service import MessageService
+from services.auth_dependencies import require_auth
+from services.service_models import Message, MessageRecipient, User
 from schemas import MessageCreate, MessageResponse, MessageRecipientResponse, BatchMarkReadRequest
 
 router = APIRouter(prefix="/api/messages", tags=["Messages"])
@@ -17,13 +19,13 @@ router = APIRouter(prefix="/api/messages", tags=["Messages"])
 # Services
 message_service = MessageService()
 
-# 依赖注入（与其他路由保持一致）
-db_config = DatabaseConfig()
-db_manager = DatabaseSessionManager(db_config)
-get_db = db_manager.get_sync_session  # 同步会话依赖
-get_async_db = db_manager.get_async_session  # 新增：异步会话依赖
+# 对外暴露的依赖注入函数
+_db_config = DatabaseConfig()
+_db_manager = DatabaseSessionManager(_db_config)
+get_async_db = _db_manager.get_async_session
 
 INTERNAL_SERVER_ERROR = "服务器内部错误"
+
 
 def _resp(data=None, message: str = "success", code: int = 0):
     return {"code": code, "message": message, "data": data}
@@ -33,6 +35,24 @@ def _resp(data=None, message: str = "success", code: int = 0):
 async def send_message(payload: MessageCreate,
                        db: AsyncSession = Depends(get_async_db),
                        current_user: User = Depends(require_auth)):
+    """发送消息，仅返回操作结果信息"""
+    try:
+        msg = await message_service.send_message(
+            db=db,
+            sender_id=str(current_user.id),
+            title=payload.title,
+            content=payload.content,
+            recipient_ids=payload.recipient_ids,
+        )
+        if not msg:
+            return _resp(None, message="发送失败", code=1)
+        return _resp(None, message="发送成功")
+    except ValueError as ve:
+        logger.error(f"发送消息异常: {ve}")
+        return _resp(None, message="异常", code=1)
+    except Exception as e:
+        logger.error(f"发送消息异常: {e}")
+        return _resp(None, message="异常", code=1)
     """发送消息，支持多个接收者
     - 将 sender_id 与 recipient_ids 强制转换为 int，匹配 BigInteger 字段
     """
@@ -44,20 +64,37 @@ async def send_message(payload: MessageCreate,
             content=payload.content,
             recipient_ids=payload.recipient_ids,
         )
-        # 转换响应模型
+        # 注意：不要直接访问 msg.recipients（异步环境下会触发懒加载导致 MissingGreenlet）
+        # 改为通过异步查询显式获取关联的接收者记录
+        rec_rs = await db.execute(
+            select(MessageRecipient).where(MessageRecipient.message_id == msg.id)
+        )
+        rec_entities = rec_rs.scalars().all()
         recipients: list[MessageRecipientResponse] = [
             MessageRecipientResponse(
                 recipient_id=str(r.recipient_id),
                 is_read=r.is_read,
                 read_at=r.read_at,
-            ) for r in msg.recipients
+            ) for r in rec_entities
         ]
+
+        # 同样，避免因模型关系的默认 joined 触发无关的联表查询，按列查询消息内容
+        msg_rs = await db.execute(
+            select(Message.title, Message.content, Message.sender_id, Message.created_at)
+            .where(Message.id == msg.id)
+            .limit(1)
+        )
+        row = msg_rs.first()
+        if not row:
+            raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
+        title, content, sender_id, created_at = row
+
         data = MessageResponse(
             id=msg.id,
-            title=msg.title,
-            content=msg.content,
-            sender_id=str(msg.sender_id),
-            created_at=msg.created_at,
+            title=title,
+            content=content,
+            sender_id=str(sender_id),
+            created_at=created_at,
             recipients=recipients,
         )
         return _resp(data.dict(), message="消息发送成功")
@@ -91,10 +128,18 @@ async def list_my_messages(
 
         results: list[dict] = []
         for m in messages:
+            # 避免直接访问 m.recipients 触发懒加载，改为按当前用户过滤后查询
+            rec_rs = await db.execute(
+                select(MessageRecipient).where(
+                    (MessageRecipient.message_id == m.id) &
+                    (MessageRecipient.recipient_id == int(str(current_user.id)))
+                )
+            )
+            rec_entities = rec_rs.scalars().all()
             recipients = [
-                MessageRecipientResponse(recipient_id=str(r.recipient_id), is_read=r.is_read, read_at=r.read_at)
-                for r in m.recipients
-                if str(r.recipient_id) == str(current_user.id)
+                MessageRecipientResponse(
+                    recipient_id=str(r.recipient_id), is_read=r.is_read, read_at=r.read_at
+                ) for r in rec_entities
             ]
             data = MessageResponse(
                 id=m.id,
