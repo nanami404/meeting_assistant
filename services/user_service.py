@@ -29,7 +29,7 @@ class UserService(object):
         """
         try:
             # 唯一性检查（仅用户名）
-            exists = await db.query(User).filter(User.user_name == user_data.user_name).first()
+            exists = db.query(User).filter(User.user_name == user_data.user_name).first()
             if exists:
                 raise ValueError("user_name 已被占用")
 
@@ -94,7 +94,7 @@ class UserService(object):
         """
         try:
             # 基础查询：仅查询活跃状态的用户
-            query = await db.query(User).filter(User.status == UserStatus.ACTIVE.value)
+            query = db.query(User).filter(User.status == UserStatus.ACTIVE.value)
 
             # 按用户姓名模糊匹配
             if name_keyword:
@@ -104,13 +104,10 @@ class UserService(object):
             if company_keyword:
                 query = query.filter(User.company.like(f"%{company_keyword}%"))
 
-            # 获取总数
+            # 计算总数
             total = query.count()
 
             # 排序
-            valid_order_fields = ["name", "company", "created_at"]
-            if order_by not in valid_order_fields:
-                order_by = "name"
             sort_col = getattr(User, order_by, User.name)
             if order.lower() == "desc":
                 query = query.order_by(sort_col.desc())
@@ -118,20 +115,12 @@ class UserService(object):
                 query = query.order_by(sort_col.asc())
 
             # 分页
-            if page < 1:
-                page = 1
-            if page_size < 1:
-                page_size = 20
-            if page_size > 100:  # 限制最大页面大小
-                page_size = 100
-
+            page = max(1, page)
+            page_size = max(1, page_size)
             items = query.offset((page - 1) * page_size).limit(page_size).all()
-
-            logger.info(f"公共接口查询用户列表: 页码={page}, 页大小={page_size}, 总数={total}")
             return items, total
-
         except Exception as e:
-            logger.error(f"公共接口查询用户列表失败: {e}")
+            logger.error(f"公共用户列表查询失败: {e}")
             raise e
 
     async def get_users(
@@ -153,7 +142,7 @@ class UserService(object):
         返回 (items, total) 二元组
         """
         try:
-            query = await db.query(User)
+            query = db.query(User)
 
             if user_role:
                 query = query.filter(User.user_role == user_role)
@@ -180,22 +169,16 @@ class UserService(object):
                 query = query.filter(User.email.like(f"%{email_keyword}%"))
             if company_keyword:
                 query = query.filter(User.company.like(f"%{company_keyword}%"))
-            # 去除 id_number 相关过滤（对齐初始化脚本）
 
             total = query.count()
 
             # 排序
             sort_col = getattr(User, order_by, User.created_at)
-            if order.lower() == "desc":
-                query = query.order_by(sort_col.desc())
-            else:
-                query = query.order_by(sort_col.asc())
+            query = query.order_by(sort_col.desc() if order.lower() == "desc" else sort_col.asc())
 
             # 分页
-            if page < 1:
-                page = 1
-            if page_size < 1:
-                page_size = 20
+            page = max(1, page)
+            page_size = max(1, page_size)
             items = query.offset((page - 1) * page_size).limit(page_size).all()
             return items, total
         except Exception as e:
@@ -208,18 +191,12 @@ class UserService(object):
         - active_only=False：返回任意状态用户（用于管理员场景）
         """
         try:
-            # 将字符串ID转换为整数以匹配 BigInteger 主键类型
-            try:
-                user_id_int = user_id
-            except (TypeError, ValueError):
-                user_id_int = None
-            query = (
-                await db.query(User).filter(User.id == user_id_int)
-                if user_id_int is not None
-                else db.query(User).filter(User.id == user_id)
+            # 同步会话使用 ORM query；不进行 await
+            query = db.query(User).filter(
+                User.id == user_id
             )
             if active_only:
-                query = await query.filter(User.status == UserStatus.ACTIVE.value)
+                query = query.filter(User.status == UserStatus.ACTIVE.value)
             return query.first()
         except Exception as e:
             logger.error(f"查询用户失败(id={user_id}): {e}")
@@ -227,7 +204,7 @@ class UserService(object):
 
     async def get_user_by_email(self, db: Session, email: str) -> Optional[User]:
         """根据邮箱获取用户"""
-        user = await db.query(User).filter(User.email == email).first()
+        user = db.query(User).filter(User.email == email).first()
         try:
             return user
         except Exception as e:
@@ -245,7 +222,7 @@ class UserService(object):
 
     async def get_user_by_phone(self, db: Session, phone: str) -> Optional[User]:
         """根据手机号获取用户"""
-        user = await db.query(User).filter(User.phone == phone).first()
+        user = db.query(User).filter(User.phone == phone).first()
         try:
             return user
         except Exception as e:
@@ -291,7 +268,7 @@ class UserService(object):
                 user_id_int = int(user_id)
             except (TypeError, ValueError):
                 user_id_int = None
-            user = await db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
+            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return None
 
@@ -309,32 +286,24 @@ class UserService(object):
                 if exists:
                     raise ValueError(f"{field_name} 已被占用")
 
-            if "user_name" in provided:
-                check_unique("user_name", provided.get("user_name"))
+            # 应用更新（包含可能的置空）
+            for field, new_value in provided.items():
+                if field == "user_name":
+                    check_unique("user_name", new_value)
+                setattr(user, field, new_value)
 
-            # 应用更新（包括显式置为 None 的可选字段）
-            # 注意：Pydantic 中为 role 字段，模型中为 user_role，需要映射
-            for field in ["name", "user_name", "gender", "phone", "email", "company", "status"]:
-                if field in provided:
-                    setattr(user, field, provided.get(field))
-            if "user_role" in provided:
-                user.user_role = provided.get("user_role")
-
-            # 审计字段
-            if updated_by:
+            if updated_by is not None:
                 user.updated_by = updated_by
-            user.updated_at = datetime.now(timezone.utc)
-
+            user.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
             db.commit()
             db.refresh(user)
-            logger.info(f"用户更新成功: {user.id}")
             return user
         except ValueError as ve:
-            logger.warning(f"更新用户参数错误(id={user_id}): {ve}")
+            logger.warning(f"更新用户信息参数错误(id={user_id}): {ve}")
             db.rollback()
             raise ve
         except Exception as e:
-            logger.error(f"更新用户失败(id={user_id}): {e}")
+            logger.error(f"更新用户信息失败(id={user_id}): {e}")
             db.rollback()
             raise e
 
@@ -415,7 +384,7 @@ class UserService(object):
                 user_id_int = int(user_id)
             except (TypeError, ValueError):
                 user_id_int = None
-            user = await db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
+            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return False
             user.status = status
@@ -446,7 +415,7 @@ class UserService(object):
                 user_id_int = int(user_id)
             except (TypeError, ValueError):
                 user_id_int = None
-            user = await db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
+            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
             if not user:
                 return False
             # 生成新的密码哈希

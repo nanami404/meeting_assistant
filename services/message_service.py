@@ -98,7 +98,8 @@ class MessageService(object):
             .join(MessageRecipient, MessageRecipient.message_id == Message.id)
             .where(*conditions)
         )
-        total = await db.execute(count_q).scalar() or 0
+        count_result = await db.execute(count_q)
+        total = count_result.scalar() or 0
 
         # 计算偏移
         offset = max(0, (page - 1) * page_size)
@@ -113,7 +114,8 @@ class MessageService(object):
             .offset(offset)
             .limit(page_size)
         )
-        id_rows = await db.execute(ids_q).all()
+        ids_result = await db.execute(ids_q)
+        id_rows = ids_result.all()
         ids = [row[0] for row in id_rows]
 
         if not ids:
@@ -126,7 +128,8 @@ class MessageService(object):
             .options(selectinload(Message.recipients))
             .order_by(Message.created_at.desc())
         )
-        messages = await db.execute(data_q).scalars().all()
+        data_result = await db.execute(data_q)
+        messages = data_result.scalars().all()
         return messages, total
 
     async def mark_read(self,
@@ -147,11 +150,12 @@ class MessageService(object):
         except (TypeError, ValueError):
             raise ValueError("message_id 与 recipient_id 必须是数字或可转换为数字的字符串")
 
-        mr = await db.execute(
+        result = await db.execute(
             select(MessageRecipient).where(
                 (MessageRecipient.message_id == mid_int) & (MessageRecipient.recipient_id == rid_int)
             ).limit(1)
-        ).scalar_one_or_none()
+        )
+        mr = result.scalar_one_or_none()
 
         if not mr:
             return False
