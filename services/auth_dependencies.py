@@ -56,7 +56,7 @@ async def get_current_user(
     # 查询用户
     user: Optional[User] = None
     try:
-        user = await user_service.get_user_by_id(db, user_id)  # type: ignore
+        user = user_service.get_user_by_id(db, user_id)  # type: ignore
     except Exception:
         logger.error("查询当前用户异常", user_id=user_id)
         _raise_http(status.HTTP_401_UNAUTHORIZED, "无法获取当前用户", "unauthorized")
