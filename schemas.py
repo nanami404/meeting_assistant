@@ -384,3 +384,6 @@ class MessageResponse(BaseModel):
 
     class Config(object):
         from_attributes = True
+
+class BatchMarkReadRequest(BaseModel):
+    message_ids: list[int]

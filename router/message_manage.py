@@ -1,5 +1,4 @@
 # 标准库
-from typing import List
 from loguru import logger
 
 # 第三方库
@@ -11,8 +10,7 @@ from db.databases import DatabaseConfig, DatabaseSessionManager
 from services.auth_dependencies import require_auth
 from services.service_models import User
 from services.message_service import MessageService
-from schemas import MessageCreate, MessageResponse, MessageRecipientResponse
-from pydantic import BaseModel
+from schemas import MessageCreate, MessageResponse, MessageRecipientResponse, BatchMarkReadRequest
 
 router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
@@ -202,6 +200,3 @@ async def delete_message_links(
     except Exception as e:
         logger.error(f"删除消息关联异常: {e}")
         raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
-
-class BatchMarkReadRequest(BaseModel):
-    message_ids: list[str]
