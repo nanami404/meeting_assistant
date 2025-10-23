@@ -8,11 +8,11 @@ logger = logging.getLogger(__name__)
 class ConnectionManager(object):
     def __init__(self):
         # Store active connections: client_id -> WebSocket
-        self.active_connections: Dict[str, WebSocket] = {}
+        self.active_connections: dict[str, WebSocket] = {}
         # Store room connections: room_id -> List[client_id]
-        self.room_connections: Dict[str, List[str]] = {}
+        self.room_connections: dict[str, list[str]] = {}
         # Store client metadata: client_id -> metadata
-        self.client_metadata: Dict[str, dict] = {}
+        self.client_metadata: dict[str, dict] = {}
 
     async def connect(self, websocket: WebSocket, client_id: str)->None:
         """Accept WebSocket connection"""
@@ -114,7 +114,7 @@ class ConnectionManager(object):
                 del self.room_connections[room_id]
         logger.info(f"Client {client_id} left room {room_id}")
 
-    def get_room_clients(self, room_id: str) -> List[str]:
+    def get_room_clients(self, room_id: str) -> list[str]:
         """Get list of clients in a room"""
         return self.room_connections.get(room_id, [])
 
