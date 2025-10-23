@@ -12,6 +12,7 @@ import pytz
 from loguru import logger
 from httpx import AsyncClient
 from typing import Any, Dict,Optional
+import aiofiles
 
 #第三方库
 from sqlalchemy.orm import Session
@@ -354,7 +355,7 @@ async def upload_audio(
         audio_file: UploadFile = File(...),
         speaker_id: str = "unknown",
         db: Session = Depends(get_db)
-):
+)-> dict[str, Any]:
     """Upload audio file for transcription"""
     try:
         # Save uploaded file temporarily
@@ -378,7 +379,7 @@ async def upload_audio(
 
         file_path = f"temp/{audio_file.filename}"
         print("file_path------------------",file_path)
-        with open(file_path, "wb") as buffer:
+        async with aiofiles.open(file_path, "wb") as buffer:
             content = await audio_file.read()
             buffer.write(content)
         # 读取上传的音频

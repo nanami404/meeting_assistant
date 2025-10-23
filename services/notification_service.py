@@ -2,6 +2,7 @@
 import os
 import smtplib
 import logging
+import aiofiles
 from typing import List, Optional
 
 # 第三方库
@@ -92,8 +93,13 @@ class NotificationService(object):
             logger.error(f"Failed to send meeting summary: {str(e)}")
             return False
 
-    async def _send_email(self, to_email: str, subject: str, html_content: str,meeting: Meeting,attachment_path: Optional[str] = None):
-    #async def _send_email(self, to_email: str, subject: str, html_content: str, meeting: Meeting, attachment_path: Optional[str] = None):
+    async def _send_email(self,
+                          to_email: str,
+                          subject: str,
+                          html_content: str,
+                          meeting: Meeting,
+                          attachment_path: Optional[str] = None):
+
         """Send individual email"""
         try:
             # Create message
@@ -108,7 +114,7 @@ class NotificationService(object):
 
             # Add attachment if provided
             if attachment_path and os.path.exists(attachment_path):
-                with open(attachment_path, "rb") as attachment:
+                async with aiofiles.open(attachment_path, "rb") as attachment:
                     part = MIMEBase('application', 'octet-stream')
                     part.set_payload(attachment.read())
                 encoders.encode_base64(part)

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from loguru import logger
+from typing import Any
 
 # 自定义模块
 from db.databases import DatabaseConfig, DatabaseSessionManager
@@ -27,7 +28,7 @@ get_async_db = _db_manager.get_async_session
 INTERNAL_SERVER_ERROR = "服务器内部错误"
 
 
-def _resp(data=None, message: str = "success", code: int = 0):
+def _resp(data=None, message: str = "success", code: int = 0) -> dict[str, Any]:
     return {"code": code, "message": message, "data": data}
 
 
