@@ -23,18 +23,5 @@ async def get_third_party_token(
     """
     result = await third_party_token_service.get_third_party_token(base_url, app_id, app_secret)
     
-    if not result["success"]:
-        raise HTTPException(
-            status_code=400, 
-            detail=result.get("message", "Failed to retrieve token from third party API")
-        )
-    
-    return {
-        "code": 200,
-        "message": "success",
-        "data": {
-            "token": result["token"],
-            "expires_in": result["expires_in"],  # 过期时间（秒）
-            "expires_at": f"{result['expires_in'] // 3600}小时后过期"  # 友好显示
-        }
-    }
+    # 直接返回第三方服务的结果，格式已符合要求
+    return result
