@@ -38,16 +38,17 @@ class MeetingService(object):
         for participant_data in meeting_data.participants:
             # 根据姓名从users表查询用户
             user = db.query(User).filter(User.name == participant_data.name).first()
+            print(user.id)
             if not user:
                 # 处理用户不存在的情况（根据业务需求选择抛错或跳过）
                 raise ValueError(f"用户 '{participant_data.name}' 不存在，请检查姓名是否正确")
             participant = Participant(
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
-                user_code=user.id,
+                user_code=str(user.id),
                 name=participant_data.name,
                 email=participant_data.email,
-                role=participant_data.role,
+                user_role=participant_data.user_role,
                 is_required=participant_data.is_required,
                 created_at = datetime.now(shanghai_tz)
             )
