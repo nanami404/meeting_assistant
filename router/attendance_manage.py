@@ -9,6 +9,7 @@ import pytz
 
 #第三方库
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from fastapi import APIRouter,HTTPException, Depends
 
 #自定义库
@@ -47,7 +48,7 @@ router = APIRouter(prefix="/api/attendance", tags=["SignIn"])
 
 # 获取当前所有人员的签到状态
 @router.get("/people", summary="获取当前所有人员的签到状态", response_model=List[PersonSignResponse])
-async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)) -> list[PersonSignResponse]:
+async def get_people_sign_status(meeting_id: str, db: Session = Depends(get_async_db)) -> list[PersonSignResponse]:
     """获取所有人员的签到状态"""
     try:
         # 调用服务层方法，传入数据库会话
@@ -61,11 +62,14 @@ async def get_people_sign_status(meeting_id: str,db: Session = Depends(get_db)) 
 async def sign(
     meeting_id: str,
     current_user_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_async_db)
 )-> dict[str, str]:
     """人员签到接口"""
     user_id = int(current_user_id)
-    user = db.query(User).filter(User.id == user_id).first()
+    #user = db.query(User).filter(User.id == user_id).first()
+    # 异步查询用户
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
     try:
         # 调用服务层的签到方法，传入姓名和数据库会话
         result = await attendance_service.sign_person(db, user.name, meeting_id, user_id)
@@ -81,13 +85,15 @@ async def sign(
 async def leave(
     meeting_id: str,
     current_user_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_async_db)
 )-> dict[str, str]:
     """
     人员请假接口（绑定会议维度）
     """
     user_id = current_user_id
-    user = db.query(User).filter(User.id == user_id).first()
+    #user = db.query(User).filter(User.id == user_id).first()
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
     try:
         # 调用服务层请假方法，传入姓名、会议ID和数据库会话
         result = await attendance_service.leave_person(
@@ -104,24 +110,3 @@ async def leave(
         # 捕获其他未知异常
         raise HTTPException(status_code=500, detail=f"请假操作失败: {str(e)}")
 
-@router.post("/close")
-async def close_sign(
-    meeting_id: str,
-    db: Session = Depends(get_db)
-) -> dict[str, str]:
-    """
-    关闭指定会议的签到功能，重置该会议内所有人员的签到/请假状态
-    """
-    try:
-        # 调用服务层方法，传入会议ID和数据库会话
-        result = await attendance_service.close_meeting_sign(
-            db=db,
-            meeting_id=meeting_id
-        )
-        return result
-    except HTTPException as e:
-        # 捕获服务层抛出的已知异常（如会议不存在）
-        raise e
-    except Exception as e:
-        # 捕获其他未知异常
-        raise HTTPException(status_code=500, detail=f"关闭操作失败: {str(e)}")

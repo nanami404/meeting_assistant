@@ -117,7 +117,15 @@ class MeetingService(object):
             current_user_id_int = int(current_user_id)
         except (TypeError, ValueError):
             current_user_id_int = None
-        user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
+
+        user_role = (
+            db.query(User.user_role)
+            .filter(User.id == current_user_id_int)
+            .scalar()
+            if current_user_id_int is not None
+            else None
+        )
+
         query = db.query(Meeting)
         print("当前角色", user_role)
         if user_role != "admin":
@@ -166,8 +174,11 @@ class MeetingService(object):
         user_role = db.query(User.user_role).filter(User.id == current_user_id_int).scalar() if current_user_id_int is not None else None
         query = db.query(Meeting)
         if user_role != "admin":
-            query = query.join(Participant, Meeting.id == Participant.meeting_id).filter(
-                Participant.user_code == current_user_id)
+            query = (
+                query
+                .join(Participant, Meeting.id == Participant.meeting_id)
+                .filter(Participant.user_code == current_user_id)
+            )
         meeting = query.filter(Meeting.id == meeting_id).first()
         if not meeting:
             return False

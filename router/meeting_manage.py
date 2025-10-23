@@ -64,7 +64,8 @@ async def root()->dict[str, str]:
 # Meeting management endpoints
 @router.post("/", summary="创建新会议", response_model=MeetingResponse)
 async def create_meeting(meeting: MeetingCreate,
-                         current_user: User = Depends(require_auth), db: Session = Depends(get_db)) ->MeetingResponse:
+                         current_user: User = Depends(require_auth),
+                         db: Session = Depends(get_db)) ->MeetingResponse:
     """创建新会议
     Args:
         meeting (MeetingCreate): 会议创建数据，已通过Pydantic验证
@@ -112,8 +113,8 @@ async def create_meeting(meeting: MeetingCreate,
         )
 
 @router.get("/user/", summary="获取全部会议信息", response_model=List[MeetingResponse])
-async def get_meetings( current_user: User = Depends(require_auth),
-                        db: Session = Depends(get_db))-> list[MeetingResponse]:
+async def get_meetings(current_user: User = Depends(require_auth),
+                    db: Session = Depends(get_db))-> list[MeetingResponse]:
     """获取全部会议信息"""
     user_id = str(current_user.id)
     try:
@@ -135,7 +136,8 @@ async def get_meetings( current_user: User = Depends(require_auth),
 
 @router.get("/{meeting_id}/user/", summary="获取单一会议信息", response_model=MeetingResponse)
 async def get_meeting(meeting_id: str,
-                      current_user: User = Depends(require_auth), db: Session = Depends(get_db)) -> MeetingResponse:
+                      current_user: User = Depends(require_auth),
+                      db: Session = Depends(get_db)) -> MeetingResponse:
     """获取单一会议信息"""
     user_id = str(current_user.id)
     try:
@@ -176,7 +178,8 @@ def update_meeting(meeting_id: str,
 
 @router.delete("/{meeting_id}/user/", summary="删除指定会议信息")
 async def delete_meeting(meeting_id: str,
-                         current_user: User = Depends(require_auth), db: Session = Depends(get_db))-> dict[str, str]:
+                         current_user: User = Depends(require_auth),
+                         db: Session = Depends(get_db))-> dict[str, str]:
     """删除指定会议信息"""
     user_id = str(current_user.id)
     success = await meeting_service.delete_meeting(db, meeting_id,user_id)
