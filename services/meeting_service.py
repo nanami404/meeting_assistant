@@ -125,7 +125,7 @@ class MeetingService(object):
             if current_user_id_int is not None
             else None
         )
-       
+
         query = db.query(Meeting)
         print("当前角色", user_role)
         if user_role != "admin":
