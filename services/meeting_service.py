@@ -16,6 +16,7 @@ from services.service_models import Meeting, Participant, Transcription, PersonS
 from schemas import MeetingCreate, TranscriptionCreate, AttachmentCreate, Attachment
 
 
+shanghai_tz = pytz.timezone('Asia/Shanghai')
 class MeetingService(object):
     async def create_meeting(self, db: Session, meeting_data: MeetingCreate, user_id: str) -> Meeting:
         """Create a new meeting with participants"""
@@ -47,7 +48,8 @@ class MeetingService(object):
                 name=participant_data.name,
                 email=participant_data.email,
                 role=participant_data.role,
-                is_required=participant_data.is_required
+                is_required=participant_data.is_required,
+                created_at = datetime.now(shanghai_tz)
             )
             db.add(participant)
 
