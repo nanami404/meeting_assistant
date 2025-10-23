@@ -20,13 +20,20 @@ class SignInService(object):
         #meeting =await db.query(Meeting).filter(Meeting.id == meeting_id).first()
         # 异步查询
         result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
-        meeting = result.scalar_one_or_or_none()
+        meeting = result.scalar_one_or_none()
+
         if not meeting:
             raise HTTPException(
                 status_code=404,
                 detail=f"会议 ID {meeting_id} 不存在"
             )
-        return db.query(PersonSign).filter(PersonSign.meeting_id==meeting_id).order_by(PersonSign.name).all()
+        #return db.query(PersonSign).filter(PersonSign.meeting_id==meeting_id).order_by(PersonSign.name).all()
+        result = await db.execute(
+            select(PersonSign)
+            .where(PersonSign.meeting_id == meeting_id)
+            .order_by(PersonSign.name)
+        )
+        return result.scalars().all()
 
     async def sign_person(self, db: AsyncSession, name: str, meeting_id: str, user_id: str) -> dict[str, str]:
         """
@@ -40,7 +47,8 @@ class SignInService(object):
         #meeting = await db.query(Meeting).filter(Meeting.id == meeting_id).first()
         # 异步查询
         result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
-        meeting = result.scalar_one_or_or_none()
+        meeting = result.scalar_one_or_none()
+
         if not meeting:
             raise HTTPException(
                 status_code=404,
@@ -123,7 +131,7 @@ class SignInService(object):
         """
         # 1. 验证会议是否存在
         result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
-        meeting = result.scalar_one_or_or_none()
+        meeting = result.scalar_one_or_none()
         if not meeting:
             raise HTTPException(
                 status_code=404,

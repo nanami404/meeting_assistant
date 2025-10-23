@@ -125,7 +125,7 @@ class MeetingService(object):
             if current_user_id_int is not None
             else None
         )
-
+       
         query = db.query(Meeting)
         print("当前角色", user_role)
         if user_role != "admin":
@@ -156,7 +156,8 @@ class MeetingService(object):
                 name=participant_data.name,
                 email=participant_data.email,
                 user_role=participant_data.user_role,
-                is_required=participant_data.is_required
+                is_required=participant_data.is_required,
+                created_at=datetime.now(shanghai_tz)
             )
             db.add(participant)
         db.commit()
