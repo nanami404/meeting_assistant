@@ -258,11 +258,20 @@ class UserService(object):
                           db: Session,
                           user_id: str,
                           update_data: UserUpdate,
-                          updated_by: Optional[str] = None) -> Optional[User]:
-        """更新用户信息（包含唯一性检查）
+                          updated_by: Optional[str] = None,
+                          operator_role: Optional[str] = None,
+                          operator_id: Optional[str] = None) -> Optional[User]:
+        """更新用户信息（包含唯一性检查与权限控制）
         - 仅更新请求中显式提供的字段（即使值为 None 也会应用），以支持将可选字段置空
+        - 权限控制：非管理员只能更新自己的信息，且不能修改角色或状态
+        - 操作日志：记录变更字段及操作者
         """
         try:
+            # 权限控制：如果提供了操作者信息，进行校验
+            if operator_role and operator_role != UserRole.ADMIN.value:
+                if not operator_id or str(operator_id) != str(user_id):
+                    raise PermissionError("非管理员用户只能修改自己的信息")
+            
             # 将字符串ID转换为整数以匹配 BigInteger 主键类型
             try:
                 user_id_int = int(user_id)
@@ -275,8 +284,14 @@ class UserService(object):
             # 仅对请求中显式提供的字段进行处理
             provided = update_data.model_dump(exclude_unset=True)
 
+            # 非管理员禁止修改角色与状态
+            if operator_role and operator_role != UserRole.ADMIN.value:
+                for forbidden in ("user_role", "status"):
+                    if forbidden in provided:
+                        raise PermissionError("非管理员用户只能修改自己的信息")
+
             # 如果更新 user_name，需要检查唯一性（对齐初始化脚本）
-            def check_unique(field_name: str, new_value: Optional[str]) -> User:
+            def check_unique(field_name: str, new_value: Optional[str]) -> None:
                 if new_value is None:
                     return
                 exists = db.query(User).filter(
@@ -286,10 +301,14 @@ class UserService(object):
                 if exists:
                     raise ValueError(f"{field_name} 已被占用")
 
-            # 应用更新（包含可能的置空）
+            # 应用更新（包含可能的置空），并记录变更
+            changes: dict[str, tuple[Any, Any]] = {}
             for field, new_value in provided.items():
                 if field == "user_name":
                     check_unique("user_name", new_value)
+                old_value = getattr(user, field, None)
+                if old_value != new_value:
+                    changes[field] = (old_value, new_value)
                 setattr(user, field, new_value)
 
             if updated_by is not None:
@@ -297,7 +316,18 @@ class UserService(object):
             user.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
             db.commit()
             db.refresh(user)
+
+            # 操作日志：记录操作者与变更明细
+            try:
+                logger.info(f"用户更新: operator_id={updated_by} target_id={user_id} changes={changes}")
+            except Exception:
+                pass
+
             return user
+        except PermissionError as pe:
+            logger.warning(f"更新用户权限拒绝(id={user_id}): {pe}")
+            db.rollback()
+            raise pe
         except ValueError as ve:
             logger.warning(f"更新用户信息参数错误(id={user_id}): {ve}")
             db.rollback()

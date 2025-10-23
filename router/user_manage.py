@@ -393,10 +393,33 @@ async def get_user(user_id: str, db: Session = Depends(get_db), current_user: Us
 
 
 @router.put("/users/{user_id}", summary="更新用户信息", response_model=dict)
-async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
-    """更新用户信息（管理员权限）"""
+async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
+    """更新用户信息
+    - 身份验证：必须登录（require_auth）
+    - 权限控制：非管理员只能修改自己的信息；尝试修改他人返回403
+    - 数据校验：Pydantic模型UserUpdate已校验；服务层进行唯一性检查
+    - 操作日志：记录操作者ID、时间与变更字段
+    """
     try:
-        user = await user_service.update_user(db, user_id, payload, updated_by=str(current_user.id))
+        # 非管理员只能修改自己的信息
+        if current_user.user_role != UserRole.ADMIN.value and str(current_user.id) != str(user_id):
+            _raise(status.HTTP_403_FORBIDDEN, "非管理员用户只能修改自己的信息", "forbidden")
+        
+        # 非管理员不能修改角色或状态
+        if current_user.user_role != UserRole.ADMIN.value:
+            provided = payload.model_dump(exclude_unset=True)
+            if "user_role" in provided or "status" in provided:
+                _raise(status.HTTP_403_FORBIDDEN, "非管理员用户只能修改自己的信息", "forbidden")
+
+        # 调用服务层，传入操作者角色和ID以执行更细的权限校验与日志
+        user = await user_service.update_user(
+            db,
+            user_id,
+            payload,
+            updated_by=str(current_user.id),
+            operator_role=current_user.user_role,
+            operator_id=str(current_user.id)
+        )
         if not user:
             _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
         data = UserResponse(
@@ -417,6 +440,8 @@ async def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(g
         return _resp(data.dict())
     except HTTPException:
         raise
+    except PermissionError as pe:
+        _raise(status.HTTP_403_FORBIDDEN, str(pe), "forbidden")
     except ValueError as ve:
         _raise(status.HTTP_400_BAD_REQUEST, str(ve), "bad_request")
     except Exception as e:

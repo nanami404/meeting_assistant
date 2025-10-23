@@ -23,6 +23,7 @@ from services.speech_service import SpeechService
 from services.email_service import EmailService
 import router
 from router import user_manage as user_router
+from router import third_party_manage  # 添加这一行
 
 # 对外暴露的依赖注入函数
 db_config = DatabaseConfig()
@@ -130,6 +131,7 @@ app.include_router(router.user_manage)
 app.include_router(router.meeting_manage)
 app.include_router(router.attendance_manage)
 app.include_router(router.message_manage)
+app.include_router(third_party_manage.router)  # 添加这一行
 
 # 健康检查
 from router.health_check import router as health_router
