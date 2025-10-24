@@ -32,7 +32,7 @@ from services.speech_service import SpeechService
 from services.email_service import EmailService
 from services.auth_dependencies import require_auth
 
-from services.service_models import User,  TranslationText
+from services.service_models import User,  TranslationText, TranslationTextRequest
 from schemas import MeetingCreate, MeetingResponse, TranscriptionCreate
 
 # 定义 Token 验证方案（Bearer Token）
@@ -275,10 +275,8 @@ class TranslationBatch(BaseModel):
 
 
 # 后台任务：连接外部 wss 服务并接收消息
-@router.post("/{meeting_id}/translate_text_load")
-async def translate_text_load(meeting_id: str,
-                              translate_text: str,
-                              speaker_name: str = None)-> dict[str, Any]:
+@router.post("/translate_text_load")
+async def translate_text_load(request: TranslationTextRequest, db: Session = Depends(get_db))-> dict[str, Any]:
     """
     接收翻译文本数据并录入数据库
 
@@ -290,18 +288,19 @@ async def translate_text_load(meeting_id: str,
     Returns:
         dict: 操作结果
     """
-    db = None
     try:
-        db = next(get_db())
+        meeting_id = request.meetingId
+        translate_text = request.translateText
+        speaker_name = request.speakerName
 
         # 验证输入参数
-        if not meeting_id or not meeting_id.strip():
+        if not meeting_id:
             raise HTTPException(
                 status_code=400,
                 detail="会议ID不能为空"
             )
 
-        if not translate_text or not translate_text.strip():
+        if not translate_text:
             raise HTTPException(
                 status_code=400,
                 detail="翻译文本不能为空"
@@ -309,17 +308,16 @@ async def translate_text_load(meeting_id: str,
 
         # 创建新的翻译文本记录
         translation_record = TranslationText(
-            meeting_id=meeting_id.strip(),
-            speaker_name=speaker_name.strip() if speaker_name else None,
-            text=translate_text.strip(),
+            meeting_id=meeting_id,
+            speaker_name=request.extract_conversation_data()['speakers'],
+            text=request.extract_conversation_data()['full_text'],
             created_time=datetime.now(pytz.timezone('Asia/Shanghai'))
         )
-
+        print("提取文本", request.extract_conversation_data()['full_text'])
         # 添加到数据库
         db.add(translation_record)
         db.commit()
         db.refresh(translation_record)
-
         logger.info(f"成功保存翻译文本，会议ID: {meeting_id}, 记录ID: {translation_record.id}")
 
         return {
