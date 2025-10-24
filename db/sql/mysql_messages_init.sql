@@ -16,28 +16,31 @@ SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVIS
 -- =================================================================
 DROP TABLE IF EXISTS `messages`;
 CREATE TABLE `messages` (
-    -- 主键字段
-    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
+    -- 主键字段（通过IDENTITY实现自增）
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
 
     -- 消息内容相关字段
-    `title` VARCHAR(100) NULL COMMENT '消息标题',
-    `content` TEXT NOT NULL COMMENT '消息内容',
+    `title` VARCHAR(100) NOT NULL,
+    `content` TEXT NOT NULL,
 
     -- 关联字段
-    `sender_id` BIGINT NOT NULL COMMENT '发送者ID',
+    `sender_id` VARCHAR(36) NOT NULL COMMENT '发送者ID（UUID）',
+
+    -- 状态字段
+    `is_read` TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否已读(0未读/1已读)',
 
     -- 时间戳字段
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP,
 
     -- 主键约束
     PRIMARY KEY (`id`),
 
     -- 索引
     KEY `idx_messages_sender_id` (`sender_id`),
+    KEY `idx_messages_is_read` (`is_read`),
     KEY `idx_messages_created_at` (`created_at`)
-
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息内容表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息表';
 
 -- 重新启用外键检查
 SET FOREIGN_KEY_CHECKS = 1;

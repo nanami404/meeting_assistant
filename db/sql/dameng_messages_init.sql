@@ -32,7 +32,7 @@ CREATE TABLE messages (
     content       CLOB               NOT NULL,
 
     -- 关联字段
-    sender_id     NUMBER(19)         NOT NULL,
+    sender_id     VARCHAR2(36)       NOT NULL,
 
     -- 状态字段
     is_read       NUMBER(1)          DEFAULT 0 NOT NULL,

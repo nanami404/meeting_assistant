@@ -17,31 +17,18 @@ SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVIS
 -- =================================================================
 DROP TABLE IF EXISTS `message_recipients`;
 CREATE TABLE `message_recipients` (
-    -- 主键字段
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID（自增）',
-
-    -- 关联字段
     `message_id` BIGINT NOT NULL COMMENT '消息ID（外键指向 messages.id）',
-    `recipient_id` BIGINT NOT NULL COMMENT '接收者ID',
-
-    -- 状态字段
+    `recipient_id` VARCHAR(36) NOT NULL COMMENT '接收者ID（UUID）',
     `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读(0未读/1已读)',
-    `read_at` TIMESTAMP NULL COMMENT '阅读时间（可选）',
-
-    -- 时间戳字段
+    `read_at` TIMESTAMP NULL DEFAULT NULL COMMENT '阅读时间（可选）',
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间（关联时间）',
 
-    -- 主键约束
     PRIMARY KEY (`id`),
-
-    -- 唯一约束：防止重复发送
     UNIQUE KEY `uk_message_recipient` (`message_id`, `recipient_id`),
-
-    -- 索引
     KEY `idx_message_recipients_recipient_id` (`recipient_id`),
     KEY `idx_message_recipients_is_read` (`is_read`),
     KEY `idx_message_recipients_message_id` (`message_id`)
-
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息接收者关联表';
 
 -- =================================================================

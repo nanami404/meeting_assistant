@@ -12,8 +12,7 @@ shanghai_tz = timezone("Asia/Shanghai")
 
 class MessageService(object):
     """消息业务逻辑，实现消息发送、查询与状态更新
-    - 确保 BigInteger 字段（sender_id、recipient_id、message_id）在写入/查询前正确转换为 int
-    - 与 SQLAlchemy 模型一致，避免类型不匹配导致的数据库错误
+    - 兼容用户ID为字符串UUID（与 User.id 对齐）
     """
 
     async def send_message(self,
@@ -32,31 +31,30 @@ class MessageService(object):
         Returns:
             Message: 创建完成的消息对象
         """
-        try:
-            sender_int = int(str(sender_id))
-        except (TypeError, ValueError):
-            raise ValueError("sender_id 必须是数字或可转换为数字的字符串")
+        # 验证并标准化ID为字符串
+        sid = str(sender_id).strip()
+        if not sid:
+            raise ValueError("sender_id 不能为空")
 
-        # 过滤并转换接收者ID
-        cast_recipient_ids: list[int] = []
+        cast_recipient_ids: list[str] = []
         for rid in recipient_ids:
-            try:
-                cast_recipient_ids.append(int(str(rid)))
-            except (TypeError, ValueError):
-                logger.warning(f"跳过无效的接收者ID: {rid}")
+            r = str(rid).strip()
+            if not r:
+                logger.warning(f"跳过空的接收者ID: {rid}")
+                continue
+            cast_recipient_ids.append(r)
 
         if not cast_recipient_ids:
             raise ValueError("recipient_ids 为空或全部无效")
 
         # 创建消息
-        msg = Message(title=title, content=content, sender_id=sender_int)
+        msg = Message(title=title, content=content, sender_id=sid)
         db.add(msg)
-        # 确保 msg.id 可用
         await db.flush()
 
         # 创建接收者关联记录
-        for rid_int in cast_recipient_ids:
-            mr = MessageRecipient(message_id=msg.id, recipient_id=rid_int, is_read=False)
+        for rid_str in cast_recipient_ids:
+            mr = MessageRecipient(message_id=msg.id, recipient_id=rid_str, is_read=False)
             db.add(mr)
 
         await db.commit()
@@ -146,13 +144,15 @@ class MessageService(object):
         """
         try:
             mid_int = int(str(message_id))
-            rid_int = int(str(recipient_id))
         except (TypeError, ValueError):
-            raise ValueError("message_id 与 recipient_id 必须是数字或可转换为数字的字符串")
+            raise ValueError("message_id 必须是数字或可转换为数字的字符串")
+        rid_str = str(recipient_id).strip()
+        if not rid_str:
+            raise ValueError("recipient_id 不能为空")
 
         result = await db.execute(
             select(MessageRecipient).where(
-                (MessageRecipient.message_id == mid_int) & (MessageRecipient.recipient_id == rid_int)
+                (MessageRecipient.message_id == mid_int) & (MessageRecipient.recipient_id == rid_str)
             ).limit(1)
         )
         mr = result.scalar_one_or_none()
@@ -196,7 +196,7 @@ class MessageService(object):
         # 查询当前用户且未读的关联记录
         rows = await db.execute(
             select(MessageRecipient).where(
-                (MessageRecipient.recipient_id == rid_int) &
+                (MessageRecipient.recipient_id == rid_str) &
                 (MessageRecipient.message_id.in_(cast_message_ids)) &
                 (MessageRecipient.is_read == False)
             )
@@ -205,7 +205,6 @@ class MessageService(object):
         if not recipients:
             return 0
 
-        # 批量标记为已读
         now_ts = datetime.now(shanghai_tz)
         for mr in recipients:
             mr.is_read = True
@@ -228,12 +227,11 @@ class MessageService(object):
                 Returns:
                     int: 删除的关联记录数量
                 """
-        try:
-            rid_int = int(str(recipient_id))
-        except (TypeError, ValueError):
-            raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
+        rid_str = str(recipient_id).strip()
+        if not rid_str:
+            raise ValueError("recipient_id 不能为空")
 
-        conditions = [MessageRecipient.recipient_id == rid_int]
+        conditions = [MessageRecipient.recipient_id == rid_str]
         if is_read is not None:
             conditions.append(MessageRecipient.is_read == bool(is_read))
         if message_id is not None:
@@ -243,12 +241,9 @@ class MessageService(object):
             except (TypeError, ValueError):
                 raise ValueError("message_id 必须是数字或可转换为数字的字符串")
 
-        # 为了操作安全性：至少需要一个过滤条件（is_read 或 message_id）
         if len(conditions) == 1:
-            # 只有 recipient_id 这一条件，可能误删全部关联，阻止操作
             raise ValueError("必须提供 is_read 或 message_id 之一，以限制删除范围")
 
-        # 执行删除，仅影响关联表，不触碰 messages 表
         deleted = db.query(MessageRecipient).filter(*conditions).delete(synchronize_session=False)
         await db.commit()
         return int(deleted)

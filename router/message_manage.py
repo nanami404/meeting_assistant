@@ -133,7 +133,7 @@ async def list_my_messages(
             rec_rs = await db.execute(
                 select(MessageRecipient).where(
                     (MessageRecipient.message_id == m.id) &
-                    (MessageRecipient.recipient_id == int(str(current_user.id)))
+                    (MessageRecipient.recipient_id == str(current_user.id))
                 )
             )
             rec_entities = rec_rs.scalars().all()
