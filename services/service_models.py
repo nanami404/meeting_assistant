@@ -310,7 +310,7 @@ class Message(Base):
 
     # 关联用户
     # 注意：将 sender_id 显式声明为外键，以便 SQLAlchemy 正确建立 Message.sender 关系
-    sender_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, comment="发送者ID")
+    sender_id = Column(String(36), ForeignKey("users.id"), nullable=False, comment="发送者ID（UUID）")
 
     # 发送者关系 - 关联到 User 模型
     # 说明：为便于在查询中使用 joinedload(Message.sender) 以及在业务代码中访问 msg.sender.user_name
@@ -345,7 +345,7 @@ class MessageRecipient(Base):
 
     # 关联字段
     message_id = Column(BigInteger, ForeignKey("messages.id"), nullable=False, comment="消息ID（外键指向 messages.id）")
-    recipient_id = Column(BigInteger, nullable=False, comment="接收者ID")
+    recipient_id = Column(String(36), nullable=False, comment="接收者ID（UUID）")
 
     # 状态字段
     is_read = Column(Boolean, nullable=False, default=False, comment="是否已读(0未读/1已读)")

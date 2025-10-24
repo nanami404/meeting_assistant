@@ -461,3 +461,57 @@ class UserService(object):
             logger.error(f"重置用户密码失败(id={user_id}): {e}")
             db.rollback()
             raise e
+
+    async def change_password(self,
+                              db: Session,
+                              user_id: str,
+                              old_password: str,
+                              new_password: str,
+                              operator_id: Optional[str] = None) -> bool:
+        """修改用户密码（需提供旧密码，避免旧密码复用）
+        规则：
+        - 校验用户存在与状态
+        - 验证旧密码正确
+        - 新密码不得与旧密码相同（防止复用）
+        - 使用bcrypt加密存储
+        - 原子提交，失败回滚
+        """
+        try:
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                user_id_int = None
+            user = db.query(User).filter(User.id == (user_id_int if user_id_int is not None else user_id)).first()
+            if not user:
+                return False
+            if str(user.status) != UserStatus.ACTIVE.value:
+                raise PermissionError("用户状态不允许修改密码")
+
+            # 验证旧密码
+            if not self.verify_password(user, plain_password=old_password):
+                raise PermissionError("旧密码不正确")
+            # 防止复用旧密码
+            if self.verify_password(user, plain_password=new_password):
+                raise ValueError("新密码不能与旧密码相同")
+
+            # 加密并更新
+            hashed = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            user.password_hash = hashed
+            if operator_id:
+                user.updated_by = operator_id
+            user.updated_at = datetime.now(pytz.timezone('Asia/Shanghai'))
+            db.commit()
+            logger.info(f"用户修改密码成功: user_id={user_id}")
+            return True
+        except PermissionError as pe:
+            logger.warning(f"修改密码权限拒绝(id={user_id}): {pe}")
+            db.rollback()
+            raise pe
+        except ValueError as ve:
+            logger.warning(f"修改密码参数错误(id={user_id}): {ve}")
+            db.rollback()
+            raise ve
+        except Exception as e:
+            logger.error(f"修改密码失败(id={user_id}): {e}")
+            db.rollback()
+            raise e

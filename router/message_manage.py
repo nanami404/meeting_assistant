@@ -13,7 +13,7 @@ from db.databases import DatabaseConfig, DatabaseSessionManager
 from services.message_service import MessageService
 from services.auth_dependencies import require_auth
 from services.service_models import Message, MessageRecipient, User
-from schemas import MessageCreate, MessageResponse, MessageRecipientResponse, BatchMarkReadRequest
+from schemas import MessageCreate, MessageResponse, MessageRecipientResponse, BatchMarkReadRequest, MessageForUserResponse
 
 router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
@@ -117,7 +117,7 @@ async def list_my_messages(
     """查询当前用户收到的消息（支持分页）"""
     try:
         # 根据 only_unread 控制是否仅查询未读消息；未提供则视为 False
-        only_unread_effective = True if only_unread is True else False
+        only_unread_effective = only_unread if only_unread is not None else False
 
         messages, total = await message_service.list_messages(
             db,
@@ -133,22 +133,23 @@ async def list_my_messages(
             rec_rs = await db.execute(
                 select(MessageRecipient).where(
                     (MessageRecipient.message_id == m.id) &
-                    (MessageRecipient.recipient_id == int(str(current_user.id)))
+                    (MessageRecipient.recipient_id == str(current_user.id))
                 )
             )
-            rec_entities = rec_rs.scalars().all()
-            recipients = [
-                MessageRecipientResponse(
-                    recipient_id=str(r.recipient_id), is_read=r.is_read, read_at=r.read_at
-                ) for r in rec_entities
-            ]
-            data = MessageResponse(
+            rec_entity = rec_rs.scalars().first()
+            if not rec_entity:
+                # 如果没有找到当前用户的接收记录，跳过该消息
+                continue
+
+            data = MessageForUserResponse(
                 id=m.id,
                 title=m.title,
                 content=m.content,
                 sender_id=str(m.sender_id),
                 created_at=m.created_at,
-                recipients=recipients,
+                recipient_id=str(rec_entity.recipient_id),
+                is_read=rec_entity.is_read,
+                read_at=rec_entity.read_at,
             )
             results.append(data.dict())
 
@@ -247,3 +248,4 @@ async def delete_message_links(
     except Exception as e:
         logger.error(f"删除消息关联异常: {e}")
         raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR)
+

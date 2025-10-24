@@ -497,3 +497,38 @@ async def reset_password(user_id: str, db: Session = Depends(get_db), current_us
     except Exception as e:
         logger.error(f"重置用户密码异常: {e}")
         _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
+
+# 新增：用户自助修改密码接口（需旧密码验证）
+from schemas import PasswordChange
+
+@router.post("/users/{user_id}/change_password", summary="用户自助修改密码", response_model=dict)
+async def change_password(user_id: str, payload: PasswordChange, db: Session = Depends(get_db), current_user: User = Depends(require_auth)):
+    """用户自助修改密码：
+    - 仅允许本人操作（非管理员）
+    - 需提供旧密码验证
+    - 禁止新密码与旧密码相同
+    """
+    try:
+        # 非管理员只能修改自己的密码
+        if current_user.user_role != UserRole.ADMIN.value and str(current_user.id) != str(user_id):
+            _raise(status.HTTP_403_FORBIDDEN, "非管理员用户只能修改自己的密码", "forbidden")
+
+        ok = await user_service.change_password(
+            db=db,
+            user_id=user_id,
+            old_password=payload.old_password,
+            new_password=payload.new_password,
+            operator_id=str(current_user.id)
+        )
+        if not ok:
+            _raise(status.HTTP_404_NOT_FOUND, "用户不存在", "not_found")
+        return _resp({"user_id": user_id, "changed": True})
+    except HTTPException:
+        raise
+    except PermissionError as pe:
+        _raise(status.HTTP_403_FORBIDDEN, str(pe), "forbidden")
+    except ValueError as ve:
+        _raise(status.HTTP_400_BAD_REQUEST, str(ve), "bad_request")
+    except Exception as e:
+        logger.error(f"修改密码异常: {e}")
+        _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
