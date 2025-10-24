@@ -52,18 +52,24 @@ def _extract_bearer_token(authorization: Optional[str]) -> str:
 # ============================= 认证相关 =============================
 @router.post("/auth/login", summary="用户登录", response_model=dict)
 async def login(payload: UserLogin, db: Session = Depends(get_db)):
-    """用户登录，返回access与refresh令牌"""
+    """用户登录，返回access与refresh令牌
+    返回规则：成功时 code=200；失败时 code 为对应HTTP错误码，message为错误信息
+    """
     try:
         tokens = await auth_service.login_and_issue(db, payload.username, payload.password, user_service)
         if not tokens:
-            _raise(status.HTTP_401_UNAUTHORIZED, "用户名或密码错误", "auth_failed")
+            return _resp(None, message="用户名或密码错误", code=status.HTTP_401_UNAUTHORIZED)
         access_token, refresh_token = tokens
-        return _resp({"access_token": access_token, "refresh_token": refresh_token})
-    except HTTPException:
-        raise
+        return _resp({"access_token": access_token, "refresh_token": refresh_token}, code=200)
+    except HTTPException as he:
+        # 将HTTP异常转换为统一响应结构
+        msg = he.detail.get("message") if isinstance(he.detail, dict) else str(he.detail)
+        return _resp(None, message=msg, code=he.status_code)
+    except ValueError as ve:
+        return _resp(None, message=str(ve), code=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"登录异常: {e}")
-        _raise(status.HTTP_500_INTERNAL_SERVER_ERROR, "服务器内部错误", "server_error")
+        return _resp(None, message="服务器内部错误", code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @router.post("/auth/logout", summary="用户登出", response_model=dict)
