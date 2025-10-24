@@ -3,7 +3,17 @@ import uuid
 from datetime import datetime
 from enum import Enum
 import pytz
+from typing import Union, Dict, Any, List
+import json
+import re
 
+from pydantic import BaseModel,validator, Field
+from typing import Optional, Tuple, Dict, Any
+
+
+
+shanghai_tz = pytz.timezone('Asia/Shanghai')
+from pydantic import BaseModel, Field, validator
 # 第三方库 - SQLAlchemy相关
 from sqlalchemy import (
     Column,
@@ -14,7 +24,6 @@ from sqlalchemy import (
     func,
     UniqueConstraint
 )
-
 from sqlalchemy import (
      BigInteger,
     Text,
@@ -22,11 +31,121 @@ from sqlalchemy import (
     Boolean
 )
 from sqlalchemy.orm import relationship
-
 # 自定义库
 from db.databases import Base
 
-shanghai_tz = pytz.timezone('Asia/Shanghai')
+
+class SentenceItem(BaseModel):
+    sentence: str
+    progressive: str = ""
+
+    @property
+    def cleaned_sentence(self) -> str:
+        """清理后的句子内容，移除说话人标记"""
+        # 移除说话人标记模式：👤 说话人X:
+        cleaned = re.sub(r'^\\n👤\s*说话人[A-Z]:\s*["\']?', '', self.sentence)
+        cleaned = re.sub(r'["\']?$', '', cleaned)
+        return cleaned.strip()
+
+    @property
+    def speaker(self) -> Optional[str]:
+        """提取说话人信息"""
+        match = re.search(r'👤\s*(说话人[A-Z])', self.sentence)
+        return match.group(1) if match else None
+
+    @property
+    def has_content(self) -> bool:
+        """判断句子是否有实际内容"""
+        return bool(self.cleaned_sentence)
+
+
+class TranslateTextContent(BaseModel):
+    completedSentences: List[SentenceItem] = Field(default_factory=list)
+    textVal: str = ""
+
+    @property
+    def valid_sentences(self) -> List[SentenceItem]:
+        """获取有实际内容的句子"""
+        return [item for item in self.completedSentences if item.has_content]
+
+    @property
+    def speakers(self) -> List[str]:
+        """获取所有说话人列表（去重）"""
+        speaker_list = [item.speaker for item in self.valid_sentences if item.speaker]
+        return list(dict.fromkeys(speaker_list))  # 保持顺序去重
+
+    @property
+    def all_text(self) -> str:
+        """获取所有有效句子的合并文本"""
+        return ' '.join([item.cleaned_sentence for item in self.valid_sentences])
+
+    def get_sentences_by_speaker(self, speaker: str) -> List[str]:
+        """获取指定说话人的所有句子"""
+        return [
+            item.cleaned_sentence
+            for item in self.valid_sentences
+            if item.speaker == speaker
+        ]
+
+
+class TranslationTextRequest(BaseModel):
+    meetingId: str
+    translateText: Union[str, Dict[str, Any], TranslateTextContent]
+    speakerName: str = Field(default="")
+
+    @validator('translateText', pre=True)
+    def parse_translate_text(cls, v):
+        """将字符串类型的translateText解析为字典"""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return v  # 如果解析失败，返回原字符串
+        return v
+
+    def get_parsed_translate_text(self) -> TranslateTextContent:
+        """获取解析后的translateText内容"""
+        if isinstance(self.translateText, str):
+            try:
+                parsed = json.loads(self.translateText)
+            except json.JSONDecodeError:
+                # 如果解析失败，返回空的TranslateTextContent
+                return TranslateTextContent()
+        else:
+            parsed = self.translateText
+
+        # 转换为强类型模型
+        return TranslateTextContent(**parsed)
+
+    def extract_conversation_data(self) -> Dict[str, Any]:
+        """提取完整的对话数据"""
+        content = self.get_parsed_translate_text()
+
+        # 按说话人分组
+        conversation_by_speaker = {}
+        for speaker in content.speakers:
+            conversation_by_speaker[speaker] = content.get_sentences_by_speaker(speaker)
+
+        return {
+            "meeting_id": self.meetingId,
+            "speaker_name": self.speakerName,
+            "speakers": content.speakers,
+            "total_sentences": len(content.completedSentences),
+            "valid_sentences": len(content.valid_sentences),
+            "conversation_by_speaker": conversation_by_speaker,
+            "full_text": content.all_text,
+            "sentences_detail": [
+                {
+                    "original": item.sentence,
+                    "cleaned": item.cleaned_sentence,
+                    "speaker": item.speaker,
+                    "has_content": item.has_content,
+                    "progressive": item.progressive
+                }
+                for item in content.completedSentences
+            ]
+        }
+
 
 class UserRole(str, Enum):
     """用户角色枚举"""
