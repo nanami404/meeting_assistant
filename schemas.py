@@ -387,3 +387,35 @@ class MessageResponse(BaseModel):
 
 class BatchMarkReadRequest(BaseModel):
     message_ids: list[int]
+
+class MessageForUserResponse(BaseModel):
+    id: int
+    title: str
+    content: str
+    sender_id: str
+    created_at: datetime
+    recipient_id: str
+    is_read: bool
+    read_at: Optional[datetime] = None
+
+    class Config(object):
+        from_attributes = True
+
+
+# 新增：用户密码修改请求模型
+class PasswordChange(BaseModel):
+    old_password: str = Field(..., min_length=8, max_length=128, description="旧密码")
+    new_password: str = Field(..., min_length=8, max_length=128, description="新密码")
+
+    @validator('new_password')
+    def validate_new_password(cls: Any, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('新密码长度至少为8位')
+        has_upper = bool(re.search(r'[A-Z]', v))
+        has_lower = bool(re.search(r'[a-z]', v))
+        has_digit = bool(re.search(r'\d', v))
+        has_special = bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', v))
+        complexity_count = sum([has_upper, has_lower, has_digit, has_special])
+        if complexity_count < 3:
+            raise ValueError('新密码必须包含大写、小写、数字、特殊字符中的至少3种')
+        return v

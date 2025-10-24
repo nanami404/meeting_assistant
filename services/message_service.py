@@ -73,20 +73,15 @@ class MessageService(object):
                     查询用户收到的消息列表（分页）
                 Args:
                     db: 数据库会话
-                    recipient_id: 接收者用户ID（字符串），转换为 int 查询
+                    recipient_id: 接收者用户ID（字符串）
                     only_unread: 仅查询未读消息
                     page: 页码，从1开始
                     page_size: 每页数量
                 Returns:
                     tuple[list[Message], int]: (消息列表, 总条数)
          """
-        try:
-            rid_int = int(str(recipient_id))
-        except (TypeError, ValueError):
-            raise ValueError("recipient_id 必须是数字或可转换为数字的字符串")
-
         # 构建过滤条件
-        conditions = [MessageRecipient.recipient_id == rid_int]
+        conditions = [MessageRecipient.recipient_id == recipient_id]
         if only_unread:
             conditions.append(MessageRecipient.is_read == False)
 
